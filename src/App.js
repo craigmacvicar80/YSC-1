@@ -17,7 +17,7 @@ import {
     LogOut 
 } from 'lucide-react';
 
-// --- Import Pages (Linking to your existing files) ---
+// --- Import Pages ---
 import Dashboard from './pages/Dashboard';
 import Portfolio from './pages/Portfolio';
 import Events from './pages/Events';
@@ -41,15 +41,15 @@ export default function App() {
     const navItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'portfolio', label: 'Portfolio', icon: FolderOpen },
-        { id: 'events', label: 'Events', icon: Calendar },           // Renamed to 'Events'
+        { id: 'events', label: 'Events', icon: Calendar },           
         { id: 'pathway', label: 'Pathway', icon: Map },
         { id: 'jobs', label: 'Jobs', icon: Briefcase },
         { id: 'development', label: 'Personal Dev', icon: BookOpen },
         { id: 'tasks', label: 'Tasks', icon: CheckSquare },
-        { id: 'network', label: 'Network', icon: Users },             // Colleagues
-        { id: 'medle', label: 'Medle', icon: Gamepad2 },              // Game
-        { id: 'marketplace', label: 'Shop', icon: ShoppingBag },      // Renamed to 'Shop'
-        { id: 'contact', label: 'Contact', icon: Mail },              // Contact Platform
+        { id: 'network', label: 'Network', icon: Users },
+        { id: 'medle', label: 'Medle', icon: Gamepad2 },
+        { id: 'marketplace', label: 'Shop', icon: ShoppingBag },
+        { id: 'contact', label: 'Contact', icon: Mail },
     ];
 
     // --- Render Content Logic ---
@@ -92,9 +92,9 @@ export default function App() {
             <aside className="hidden md:flex flex-col w-64 bg-slate-900 text-slate-300 h-screen sticky top-0 shadow-xl">
                 <div className="p-6 border-b border-slate-800">
                     <h1 className="text-lg font-bold text-white flex items-center gap-2">
-                        <span className="text-blue-500 text-2xl">⚡</span> Your Surgical Career
+                        Your Surgical Career
                     </h1>
-                    <p className="text-xs text-slate-500 mt-1">Portfolio Tracker</p>
+                    {/* "Portfolio Tracker" text removed here */}
                 </div>
 
                 <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto">
@@ -134,7 +134,7 @@ export default function App() {
                 {/* Mobile Header */}
                 <div className="md:hidden bg-slate-900 text-white p-4 flex justify-between items-center shadow-md z-20">
                     <h1 className="font-bold flex items-center gap-2">
-                        <span className="text-blue-500">⚡</span> Your Surgical Career
+                        Your Surgical Career
                     </h1>
                     <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
                         {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
