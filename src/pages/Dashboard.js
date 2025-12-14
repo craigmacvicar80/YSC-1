@@ -19,8 +19,9 @@ import {
 import { Radar } from 'react-chartjs-2';
 
 // --- Firebase Imports ---
-import { collection, query, orderBy, limit, getDocs, where } from 'firebase/firestore';
+import { collection, query, limit, getDocs, where, doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
+import { useAuth } from '../context/AuthContext'; // Access Auth
 
 // --- Import User Data ---
 import { MOCK_PROFILE_DATA } from '../data/portfolioData';
@@ -46,7 +47,6 @@ const DUMMY_DATA = {
 
 // --- General Components ---
 
-// Deadline Bar Component
 const DeadlineBar = ({ task, pendingCount, onClick }) => {
     if (!task) return null; 
 
@@ -75,7 +75,6 @@ const DeadlineBar = ({ task, pendingCount, onClick }) => {
     );
 };
 
-// Simplified metric card
 const MetricCard = ({ title, value, subtext, icon, onClick, className }) => (
     <div 
         className={`bg-white p-6 rounded-xl shadow-lg border border-gray-100 flex items-center justify-between cursor-pointer hover:shadow-xl transition-shadow ${className}`}
@@ -92,7 +91,6 @@ const MetricCard = ({ title, value, subtext, icon, onClick, className }) => (
     </div>
 );
 
-// Progress Gauge
 const ProgressGauge = ({ totalPoints, goalPoints, infoContent }) => {
     const percentage = Math.min(100, Math.round((totalPoints / goalPoints) * 100));
     
@@ -130,7 +128,6 @@ const ProgressGauge = ({ totalPoints, goalPoints, infoContent }) => {
     );
 };
 
-// Radar Chart Component
 const RadarChartComponent = ({ infoContent }) => {
     const data = {
         labels: DUMMY_DATA.readinessLabels,
@@ -190,7 +187,6 @@ const RadarChartComponent = ({ infoContent }) => {
     );
 };
 
-// Contact Detail Modal
 const ContactDetailModal = ({ contact, onClose }) => {
     if (!contact) return null;
     return (
@@ -256,14 +252,14 @@ const ContactDetailModal = ({ contact, onClose }) => {
 // --- Dashboard Main Component ---
 
 export default function Dashboard({ totalPoints, activitiesCount, setActiveView }) {
+    const { currentUser } = useAuth(); // Access Auth
     
     // State
     const [networkContacts, setNetworkContacts] = useState([]);
     const [selectedContact, setSelectedContact] = useState(null);
     const [upcomingDeadline, setUpcomingDeadline] = useState(null);
     const [totalTasks, setTotalTasks] = useState(0);
-
-    const userName = MOCK_PROFILE_DATA.firstName || MOCK_PROFILE_DATA.name || 'Registrar';
+    const [userProfile, setUserProfile] = useState(null); // Real-time profile state
 
     // Progress Calculation
     const percentage = Math.round((DUMMY_DATA.totalPoints / DUMMY_DATA.goalPoints) * 100);
@@ -284,6 +280,25 @@ export default function Dashboard({ totalPoints, activitiesCount, setActiveView 
         </>
     );
 
+    // --- FETCH USER NAME FROM FIREBASE (REAL-TIME) ---
+    useEffect(() => {
+        if (currentUser) {
+            // Using onSnapshot ensures instant updates without refresh
+            const unsub = onSnapshot(doc(db, "users", currentUser.uid), (docSnapshot) => {
+                if (docSnapshot.exists()) {
+                    setUserProfile(docSnapshot.data());
+                }
+            });
+            return () => unsub();
+        }
+    }, [currentUser]);
+
+    // --- Determine Display Name ---
+    // Looks for 'name' first (used in your Portfolio edit), then 'firstName', then fallback
+    const displayName = userProfile?.name || 
+                        (userProfile?.firstName ? `${userProfile.firstName} ${userProfile.lastName || ''}`.trim() : null) || 
+                        (currentUser?.email ? currentUser.email.split('@')[0] : 'Registrar');
+
     // --- FETCH CONTACTS & TASKS ---
     useEffect(() => {
         const fetchData = async () => {
@@ -302,7 +317,6 @@ export default function Dashboard({ totalPoints, activitiesCount, setActiveView 
                 const qTasks = query(
                     collection(db, "tasks"),
                     where("status", "!=", "Completed"),
-                    // Note: compound queries require index in Firebase, simpler to fetch and sort client side if small data
                     limit(20) 
                 );
                 const snapTasks = await getDocs(qTasks);
@@ -340,7 +354,7 @@ export default function Dashboard({ totalPoints, activitiesCount, setActiveView 
     return (
         <div className="p-8 md:p-10 bg-gray-50 min-h-full">
             <h1 className="text-4xl font-bold text-slate-800 mb-8">
-                Welcome Back, {userName}
+                Welcome Back, {displayName}
             </h1>
 
             <div className="grid grid-cols-12 gap-8">

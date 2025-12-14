@@ -1,8 +1,9 @@
 // src/firebase.js
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
+import { getAuth } from "firebase/auth"; // Import Auth
 
-// REPLACE THESE VALUES WITH YOUR REAL KEYS FROM THE FIREBASE CONSOLE
+// YOUR ACTUAL FIREBASE CONFIG
 const firebaseConfig = {
   apiKey: "AIzaSyAwupPhd2FFhiByYSVsXIAoLtVZir-kUlY",
   authDomain: "your-surgical-career.firebaseapp.com",
@@ -13,8 +14,6 @@ const firebaseConfig = {
   measurementId: "G-3GHSPC7QWE"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
-
-// Initialize Database (Firestore)
 export const db = getFirestore(app);
+export const auth = getAuth(app); // Export Auth

@@ -1,13 +1,20 @@
-// src/pages/Portfolio.js - OVERWRITE COMPLETELY (Aligned Categories: Exams, Publications, Teaching, Audit/QIP, Courses)
-
-import React, { useState } from 'react';
-import { Building2, Users, FileText, Code, Award, Briefcase, PlusCircle, TrendingUp, Award as AwardIcon, Pencil, Trash2, PieChart, GraduationCap, ClipboardList, BookOpen } from 'lucide-react';
+// src/pages/Portfolio.js
+import React, { useState, useEffect } from 'react';
+import { Building2, Users, FileText, Code, Award, Briefcase, PlusCircle, TrendingUp, Award as AwardIcon, Pencil, Trash2, PieChart, GraduationCap, ClipboardList, BookOpen, Save, Loader } from 'lucide-react';
 import { EditableList } from '../components/SharedUI';
 import { AddItemModal, ActivityDetailModal, CPDMatrixModal } from '../components/Modals'; 
 import { MOCK_PROFILE_DATA } from '../data/portfolioData';
 
+// --- Firebase Imports ---
+import { useAuth } from '../context/AuthContext';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from '../firebase';
+
 function Portfolio({ activities }) {
+    const { currentUser } = useAuth();
     const initialProfileData = MOCK_PROFILE_DATA || {}; 
+    
+    // State
     const [profileData, setProfileData] = useState(initialProfileData);
     const [localActivities, setLocalActivities] = useState(activities || []); 
     
@@ -17,16 +24,35 @@ function Portfolio({ activities }) {
     const [itemToEdit, setItemToEdit] = useState(null);
     const [selectedActivity, setSelectedActivity] = useState(null); 
     
-    // Profile Edit
+    // Profile Edit State
     const [isProfileEditing, setIsProfileEditing] = useState(false);
     const [editFormData, setEditFormData] = useState(profileData);
+    const [saving, setSaving] = useState(false); // Loading state for save button
 
     // Filter State
     const [searchTerm, setSearchTerm] = useState('');
     const [filterCategory, setFilterCategory] = useState('All');
 
+    // --- 1. FETCH DATA FROM FIREBASE ON LOAD ---
+    useEffect(() => {
+        const fetchUserData = async () => {
+            if (!currentUser) return;
+            try {
+                const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+                if (userDoc.exists()) {
+                    const data = userDoc.data();
+                    // Merge fetched data with existing structure to ensure no fields are undefined
+                    setProfileData(prev => ({ ...prev, ...data }));
+                    setEditFormData(prev => ({ ...prev, ...data })); // Sync edit form
+                }
+            } catch (error) {
+                console.error("Error fetching profile:", error);
+            }
+        };
+        fetchUserData();
+    }, [currentUser]);
+
     // --- SMART CATEGORY LOGIC ---
-    // Helper to map any activity to one of the 5 target categories based on text analysis
     const getSmartCategory = (act) => {
         const text = `${act.category || ''} ${act.type || ''} ${act.description || ''}`.toLowerCase();
         
@@ -36,13 +62,15 @@ function Portfolio({ activities }) {
         if (text.includes('audit') || text.includes('qip') || text.includes('cycle') || text.includes('quality') || text.includes('improvement')) return 'Audit/QIP';
         if (text.includes('course') || text.includes('atls') || text.includes('workshop') || text.includes('training') || text.includes('life support')) return 'Courses';
         
-        return 'Other'; // Fallback
+        return 'Other'; 
     };
 
     // --- HANDLERS ---
     const openAddModal = (category) => { setItemToEdit(null); setActiveModalCategory(category); };
     const openEditModal = (category, item) => { setItemToEdit(item); setActiveModalCategory(category); };
     
+    // Note: These handlers currently update LOCAL state. 
+    // To make lists persist, you would wrap these in setDoc calls similar to handleProfileSave below.
     const handleSaveItem = (category, item) => {
         if (category === 'Activity') {
             setLocalActivities(prev => {
@@ -81,9 +109,30 @@ function Portfolio({ activities }) {
         setSelectedActivity(null); 
     };
 
-    const handleProfileSave = () => { setProfileData(editFormData); setIsProfileEditing(false); };
+    // --- 2. THE NEW SAVE PROFILE FUNCTION ---
+    const handleProfileSave = async () => { 
+        if (!currentUser) return alert("You must be logged in to save.");
+        setSaving(true);
+        
+        try {
+            // Save to Firestore 'users' collection
+            await setDoc(doc(db, "users", currentUser.uid), {
+                ...editFormData,
+                // We merge this with existing data so we don't lose other fields
+            }, { merge: true });
+
+            // Update UI
+            setProfileData(editFormData); 
+            setIsProfileEditing(false);
+        } catch (error) {
+            console.error("Error saving profile:", error);
+            alert("Failed to save profile. Check console.");
+        } finally {
+            setSaving(false);
+        }
+    };
     
-    // --- POINTS CALCULATION (Using Smart Categories) ---
+    // --- POINTS CALCULATION ---
     const totalPoints = localActivities.reduce((sum, act) => sum + (Number(act.points) || 0), 0);
 
     const pointsOverview = {
@@ -105,7 +154,7 @@ function Portfolio({ activities }) {
         else if (smartCat === 'Courses') pointsOverview.courses += p;
     });
 
-    // --- FILTERING (Using Smart Categories) ---
+    // --- FILTERING ---
     const filteredActivities = localActivities.filter(act => {
         const matchesSearch = (act.description || '').toLowerCase().includes(searchTerm.toLowerCase());
         const smartCat = getSmartCategory(act);
@@ -115,7 +164,7 @@ function Portfolio({ activities }) {
 
     const userName = profileData.name || 'Surgical Trainee';
     const userLevel = profileData.level || 'CT1 (Core Training)';
-    const userInitials = userName.split(' ').map(n => n[0]).join('').slice(0, 2);
+    const userInitials = userName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
 
     return (
         <div className="p-6 space-y-6">
@@ -131,11 +180,19 @@ function Portfolio({ activities }) {
                     </div>
                     <div className="flex-1">
                         {isProfileEditing ? (
-                            <input value={editFormData.name || ''} onChange={e => setEditFormData({...editFormData, name: e.target.value})} className="text-2xl font-bold border rounded p-1 mb-1 w-full" />
+                            <div className="space-y-2">
+                                <label className="text-xs text-gray-500 uppercase font-bold">Full Name</label>
+                                <input value={editFormData.name || ''} onChange={e => setEditFormData({...editFormData, name: e.target.value})} className="text-xl font-bold border rounded p-1 w-full" placeholder="Full Name" />
+                                <label className="text-xs text-gray-500 uppercase font-bold">Current Level</label>
+                                <input value={editFormData.level || ''} onChange={e => setEditFormData({...editFormData, level: e.target.value})} className="text-sm border rounded p-1 w-full" placeholder="e.g. ST3" />
+                            </div>
                         ) : (
-                            <h3 className="text-2xl font-bold text-slate-900">{userName}</h3>
+                            <>
+                                <h3 className="text-2xl font-bold text-slate-900">{userName}</h3>
+                                <p className="text-blue-600 font-semibold bg-blue-50 inline-block px-2 py-0.5 rounded-md mt-1">{userLevel}</p>
+                            </>
                         )}
-                        <p className="text-blue-600 font-semibold bg-blue-50 inline-block px-2 py-0.5 rounded-md mt-1">{userLevel}</p>
+                        
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-8 gap-y-2 mt-4 text-sm text-gray-500">
                             <div><span className="uppercase text-[10px] font-bold tracking-wider text-gray-400 block">GMC No.</span>
                                 {isProfileEditing ? <input value={editFormData.gmc || ''} onChange={e => setEditFormData({...editFormData, gmc: e.target.value})} className="border rounded p-0.5 w-full text-slate-800" /> : (profileData.gmc || 'N/A')}
@@ -150,8 +207,12 @@ function Portfolio({ activities }) {
                     </div>
                 </div>
                 <div className="flex flex-col items-end gap-2 shrink-0">
-                    <button onClick={isProfileEditing ? handleProfileSave : () => setIsProfileEditing(true)} className="text-xs bg-white border border-gray-300 text-slate-600 px-3 py-1.5 rounded-lg font-medium shadow-sm hover:bg-gray-50 transition-colors">
-                        {isProfileEditing ? 'Save Changes' : 'Edit Profile'}
+                    <button 
+                        onClick={isProfileEditing ? handleProfileSave : () => setIsProfileEditing(true)} 
+                        disabled={saving}
+                        className="text-xs bg-white border border-gray-300 text-slate-600 px-3 py-1.5 rounded-lg font-medium shadow-sm hover:bg-gray-50 transition-colors flex items-center gap-2"
+                    >
+                        {saving ? <Loader className="animate-spin" size={14}/> : (isProfileEditing ? <><Save size={14}/> Save Changes</> : <><Pencil size={14}/> Edit Profile</>)}
                     </button>
                     <div className="flex items-center gap-2 bg-emerald-50 text-emerald-800 font-bold px-3 py-1 rounded-lg border border-emerald-200">
                         <AwardIcon size={14} /> <span className="text-sm">{totalPoints} Points</span>

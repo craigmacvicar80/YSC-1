@@ -1,49 +1,53 @@
 // src/context/AuthContext.js
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { onAuthStateChanged, signInAnonymously, signOut } from 'firebase/auth';
-import { auth } from '../config/firebase';
+import React, { useContext, useState, useEffect } from 'react';
+import { auth } from '../firebase';
+import { 
+    createUserWithEmailAndPassword, 
+    signInWithEmailAndPassword, 
+    signOut, 
+    onAuthStateChanged 
+} from 'firebase/auth';
 
-// 1. Create the Context
-const AuthContext = createContext();
+const AuthContext = React.createContext();
 
-// 2. Custom Hook to use the context easily
 export function useAuth() {
-  return useContext(AuthContext);
+    return useContext(AuthContext);
 }
 
-// 3. The Provider Component
 export function AuthProvider({ children }) {
-  const [currentUser, setCurrentUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+    const [currentUser, setCurrentUser] = useState(null);
+    const [loading, setLoading] = useState(true);
 
-  // Login function (Starts with Guest/Anonymous login like your original code)
-  function login() {
-    return signInAnonymously(auth);
-  }
+    function signup(email, password) {
+        return createUserWithEmailAndPassword(auth, email, password);
+    }
 
-  // Logout function
-  function logout() {
-    return signOut(auth);
-  }
+    function login(email, password) {
+        return signInWithEmailAndPassword(auth, email, password);
+    }
 
-  // Listen for user changes (Login/Logout events)
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
-      setLoading(false);
-    });
-    return unsubscribe;
-  }, []);
+    function logout() {
+        return signOut(auth);
+    }
 
-  const value = {
-    currentUser,
-    login,
-    logout
-  };
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            setCurrentUser(user);
+            setLoading(false);
+        });
+        return unsubscribe;
+    }, []);
 
-  return (
-    <AuthContext.Provider value={value}>
-      {!loading && children}
-    </AuthContext.Provider>
-  );
+    const value = {
+        currentUser,
+        signup,
+        login,
+        logout
+    };
+
+    return (
+        <AuthContext.Provider value={value}>
+            {!loading && children}
+        </AuthContext.Provider>
+    );
 }
