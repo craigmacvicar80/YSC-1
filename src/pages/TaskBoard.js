@@ -1,13 +1,16 @@
-// src/pages/TaskBoard.js
+// src/pages/TaskBoard.js - Fixed to save tasks under User ID so Dashboard sees them
+
 import React, { useState, useEffect } from 'react';
 import { 
-    Plus, Calendar, Trash2, AlertCircle, ArrowUpDown, 
-    Search, WifiOff, Pencil, X, MessageSquare, AlignLeft, Clock
+    Plus, Calendar, Trash2, ArrowUpDown, 
+    Search, WifiOff, X, MessageSquare, AlignLeft 
 } from 'lucide-react';
 import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { useAuth } from '../context/AuthContext'; // FIX: Import Auth
 
 export default function TaskBoard() {
+    const { currentUser } = useAuth(); // FIX: Get Current User
     const [tasks, setTasks] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
@@ -24,15 +27,19 @@ export default function TaskBoard() {
         dueDate: '',
         priority: 'Medium',
         status: 'To Do',
-        comments: '' // New Field
+        comments: '' 
     });
 
-    // --- 1. FETCH TASKS ---
+    // --- 1. FETCH TASKS (Scoped to User) ---
     useEffect(() => {
         const fetchTasks = async () => {
+            if (!currentUser) return; // Wait for user
+
             try {
                 if (db) {
-                    const querySnapshot = await getDocs(collection(db, "tasks"));
+                    // FIX: Fetch from users/{uid}/tasks instead of global 'tasks'
+                    const userTasksRef = collection(db, "users", currentUser.uid, "tasks");
+                    const querySnapshot = await getDocs(userTasksRef);
                     const tasksList = querySnapshot.docs.map(doc => ({
                         id: doc.id,
                         ...doc.data()
@@ -53,7 +60,7 @@ export default function TaskBoard() {
             }
         };
         fetchTasks();
-    }, []);
+    }, [currentUser]);
 
     const saveToLocal = (updatedTasks) => {
         setTasks(updatedTasks);
@@ -75,22 +82,24 @@ export default function TaskBoard() {
             dueDate: task.dueDate || '',
             priority: task.priority || 'Medium',
             status: task.status || 'To Do',
-            comments: task.comments || '' // Load comments
+            comments: task.comments || '' 
         });
         setShowModal(true);
     };
 
-    // --- 3. SAVE TASK ---
+    // --- 3. SAVE TASK (Scoped to User) ---
     const handleSaveTask = async (e) => {
         e.preventDefault();
-        if (!formData.title) return;
+        if (!formData.title || !currentUser) return;
 
         try {
+            const userTasksRef = collection(db, "users", currentUser.uid, "tasks");
+
             if (editingId) {
                 // Update
                 const updatedTasks = tasks.map(t => t.id === editingId ? { ...t, ...formData } : t);
                 if (db && !isOffline) {
-                    await updateDoc(doc(db, "tasks", editingId), formData);
+                    await updateDoc(doc(db, "users", currentUser.uid, "tasks", editingId), formData);
                     setTasks(updatedTasks);
                 } else {
                     saveToLocal(updatedTasks);
@@ -98,7 +107,7 @@ export default function TaskBoard() {
             } else {
                 // Create
                 if (db && !isOffline) {
-                    const docRef = await addDoc(collection(db, "tasks"), formData);
+                    const docRef = await addDoc(userTasksRef, formData);
                     setTasks([...tasks, { id: docRef.id, ...formData }]);
                 } else {
                     const offlineTask = { id: Date.now().toString(), ...formData };
@@ -119,13 +128,13 @@ export default function TaskBoard() {
 
     // --- 4. ACTIONS (Delete / Status) ---
     const handleStatusChange = async (e, task) => {
-        e.stopPropagation(); // Prevent row click
+        e.stopPropagation(); 
         const newStatus = e.target.value;
         const updatedTasks = tasks.map(t => t.id === task.id ? { ...t, status: newStatus } : t);
         
         try {
             if (db && !isOffline) {
-                await updateDoc(doc(db, "tasks", task.id), { status: newStatus });
+                await updateDoc(doc(db, "users", currentUser.uid, "tasks", task.id), { status: newStatus });
                 setTasks(updatedTasks);
             } else {
                 saveToLocal(updatedTasks);
@@ -136,12 +145,12 @@ export default function TaskBoard() {
     };
 
     const handleDelete = async (e, id) => {
-        e.stopPropagation(); // Prevent row click
+        e.stopPropagation(); 
         if (window.confirm("Delete this task?")) {
             const remainingTasks = tasks.filter(t => t.id !== id);
             try {
                 if (db && !isOffline) {
-                    await deleteDoc(doc(db, "tasks", id));
+                    await deleteDoc(doc(db, "users", currentUser.uid, "tasks", id));
                     setTasks(remainingTasks);
                 } else {
                     saveToLocal(remainingTasks);

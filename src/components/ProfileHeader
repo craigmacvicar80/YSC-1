@@ -1,0 +1,109 @@
+import React, { useState, useEffect } from 'react';
+import { Save, Award } from 'lucide-react';
+import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { db } from '../firebase'; 
+import { useAuth } from '../context/AuthContext';
+
+const PREFIXES = ["Dr", "Mr", "Mrs", "Ms", "Miss", "Prof", "Sir", "Lady"];
+
+export default function ProfileHeader() {
+  const { currentUser } = useAuth();
+  const [loading, setLoading] = useState(false);
+  
+  const [prefix, setPrefix] = useState('Dr');
+  const [fullName, setFullName] = useState('');
+  const [level, setLevel] = useState('');
+  const [gmcNo, setGmcNo] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [interest, setInterest] = useState('');
+  const [points, setPoints] = useState(0);
+
+  useEffect(() => {
+    if (currentUser) {
+      const unsub = onSnapshot(doc(db, "users", currentUser.uid), (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setPrefix(data.prefix || 'Dr');
+          setFullName(data.displayName || data.name || '');
+          setLevel(data.level || data.grade || '');
+          setGmcNo(data.gmcNo || '');
+          setStartDate(data.startDate || '');
+          setInterest(data.interest || data.specialty || '');
+          
+          const acts = data.activities || [];
+          const pts = acts.reduce((acc, curr) => acc + (Number(curr.points) || 0), 0);
+          setPoints(pts > 0 ? pts : 0); 
+        }
+      });
+      return () => unsub();
+    }
+  }, [currentUser]);
+
+  const handleSave = async () => {
+    if (!currentUser) return;
+    setLoading(true);
+    try {
+      await updateDoc(doc(db, "users", currentUser.uid), {
+        prefix,
+        displayName: fullName,
+        name: fullName,
+        level,
+        gmcNo,
+        startDate,
+        interest,
+        grade: level,
+        specialty: interest
+      });
+      alert("Profile Saved!");
+    } catch (error) {
+      console.error(error);
+      alert("Error saving");
+    }
+    setLoading(false);
+  };
+
+  const getInitials = () => {
+    if (!fullName) return 'U';
+    const cleanName = fullName.replace(/^(Dr|Mr|Mrs|Ms|Prof)\.?\s+/i, '');
+    const parts = cleanName.trim().split(' ');
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    return parts[0][0]?.toUpperCase();
+  };
+
+  return (
+    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-8">
+      <div className="flex flex-col md:flex-row gap-6 items-start">
+        <div className="w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center text-white text-2xl font-bold shrink-0 shadow-md">
+          {getInitials()}
+        </div>
+        <div className="flex-1 w-full">
+          <div className="flex flex-col md:flex-row justify-between gap-4 mb-4">
+            <div className="flex-1">
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Full Name</label>
+              <div className="flex gap-2">
+                <select className="w-24 p-2 border border-slate-300 rounded-lg bg-slate-50 font-medium outline-blue-600" value={prefix} onChange={(e) => setPrefix(e.target.value)}>
+                  {PREFIXES.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+                <input type="text" className="flex-1 p-2 border border-slate-300 rounded-lg font-bold text-slate-800 outline-blue-600" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Full Name" />
+              </div>
+            </div>
+            <div className="flex flex-col items-end gap-2 shrink-0">
+               <button onClick={handleSave} disabled={loading} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 rounded-lg text-slate-700 text-sm font-bold hover:bg-slate-50 transition">
+                 <Save size={16} /> {loading ? 'Saving...' : 'Save Profile'}
+               </button>
+               <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-lg text-sm font-bold">
+                 <Award size={16} /> {points} Points
+               </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+             <div><label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Current Level</label><input className="w-full p-2 border border-slate-300 rounded-lg text-sm" value={level} onChange={(e) => setLevel(e.target.value)} placeholder="e.g. ST3" /></div>
+             <div><label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">GMC No.</label><input className="w-full p-2 border border-slate-300 rounded-lg text-sm" value={gmcNo} onChange={(e) => setGmcNo(e.target.value)} placeholder="1234567" /></div>
+             <div><label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Start Date</label><input type="date" className="w-full p-2 border border-slate-300 rounded-lg text-sm" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></div>
+             <div className="lg:col-span-3"><label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Interest</label><input className="w-full p-2 border border-slate-300 rounded-lg text-sm" value={interest} onChange={(e) => setInterest(e.target.value)} placeholder="e.g. Surgery" /></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

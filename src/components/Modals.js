@@ -1,236 +1,269 @@
-// src/components/Modals.js - Updated Activity Categories
 import React, { useState, useEffect } from 'react';
-import { X, Upload, Calendar, Link as LinkIcon, FileText, CheckCircle, AlertCircle } from 'lucide-react';
+import { X, Save, Star, Calendar, FileText, CheckCircle, Info, MessageSquare } from 'lucide-react';
 
-// --- GENERIC MODAL WRAPPER ---
-const ModalWrapper = ({ title, onClose, children }) => (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-        <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="flex justify-between items-center p-5 border-b border-gray-100 bg-gray-50">
-                <h3 className="text-xl font-bold text-slate-800">{title}</h3>
-                <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors p-1 hover:bg-gray-200 rounded-full">
-                    <X size={20} />
-                </button>
-            </div>
-            <div className="p-6 overflow-y-auto">
-                {children}
-            </div>
-        </div>
-    </div>
-);
-
-// --- ADD/EDIT ITEM MODAL ---
+// --- 1. GENERIC ADD/EDIT ITEM MODAL ---
 export const AddItemModal = ({ category, initialData, onClose, onSave }) => {
-    const [formData, setFormData] = useState(initialData || {});
+    const [formData, setFormData] = useState({});
 
-    // Initialize defaults based on category
+    // Populate form if editing
     useEffect(() => {
-        if (!initialData) {
-            if (category === 'Activity') {
-                setFormData({ 
-                    date: new Date().toISOString().split('T')[0], 
-                    type: '', 
-                    category: 'Courses', // Default
-                    description: '', 
-                    points: 0 
-                });
-            } else {
-                setFormData({});
-            }
+        if (initialData) {
+            // FIX: Normalize data so the form isn't blank if fields were named differently in the past
+            setFormData({
+                ...initialData,
+                // If 'name' is missing, try 'title'. If 'organization' is missing, try 'issuer' or 'employer'
+                name: initialData.name || initialData.title || '',
+                organization: initialData.organization || initialData.issuer || initialData.employer || initialData.hospital || '',
+                role: initialData.role || initialData.title || '', // Fallback for employment
+                description: initialData.description || '',
+                date: initialData.date || '',
+                rating: initialData.rating || 0
+            });
+        } else {
+            // Default empty state for new items
+            setFormData({ 
+                rating: 0, 
+                points: 1,
+                date: new Date().toISOString().split('T')[0]
+            });
         }
-    }, [category, initialData]);
-
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        onSave(category, { id: initialData?.id || Date.now(), ...formData });
-        onClose();
-    };
+    }, [initialData]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    // --- FORM RENDERING LOGIC ---
-    const renderFormFields = () => {
-        switch (category) {
-            case 'Activity':
-                return (
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-1">Activity Category</label>
-                            <select 
-                                name="category" 
-                                value={formData.category || 'Courses'} 
-                                onChange={handleChange} 
-                                className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white"
-                            >
-                                <option value="Exams">Exams</option>
-                                <option value="Publications">Publications</option>
-                                <option value="Teaching">Teaching</option>
-                                <option value="Audit/QIP">Audit/QIP</option>
-                                <option value="Courses">Courses</option>
-                                <option value="Other">Other</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-1">Description</label>
-                            <input 
-                                name="description" 
-                                value={formData.description || ''} 
-                                onChange={handleChange} 
-                                placeholder="e.g. MRCS Part A, Published in BMJ..." 
-                                className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                                required 
-                            />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-1">Date</label>
-                                <input 
-                                    type="date" 
-                                    name="date" 
-                                    value={formData.date || ''} 
-                                    onChange={handleChange} 
-                                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                                    required 
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-1">Points Value</label>
-                                <input 
-                                    type="number" 
-                                    name="points" 
-                                    value={formData.points || 0} 
-                                    onChange={handleChange} 
-                                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                                    min="0"
-                                />
-                            </div>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-1">Specific Type (Optional)</label>
-                            <input 
-                                name="type" 
-                                value={formData.type || ''} 
-                                onChange={handleChange} 
-                                placeholder="e.g. Peer-Reviewed Paper, Regional Teaching" 
-                                className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                            />
-                        </div>
-                    </div>
-                );
+    const handleRating = (ratingValue) => {
+        setFormData(prev => ({ ...prev, rating: ratingValue }));
+    };
 
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        onSave(category, formData);
+        onClose();
+    };
+
+    // Render Form Fields based on Category
+    const renderFields = () => {
+        switch (category) {
             case 'Employment History':
                 return (
-                    <div className="space-y-4">
-                        <div><label className="block text-sm font-semibold text-gray-700 mb-1">Role</label><input name="role" value={formData.role || ''} onChange={handleChange} className="w-full p-2 border rounded-lg" required /></div>
-                        <div><label className="block text-sm font-semibold text-gray-700 mb-1">Hospital</label><input name="hospital" value={formData.hospital || ''} onChange={handleChange} className="w-full p-2 border rounded-lg" required /></div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div><label className="block text-sm font-semibold text-gray-700 mb-1">Start Date</label><input name="start" type="month" value={formData.start || ''} onChange={handleChange} className="w-full p-2 border rounded-lg" /></div>
-                            <div><label className="block text-sm font-semibold text-gray-700 mb-1">End Date</label><input name="end" type="month" value={formData.end || ''} onChange={handleChange} className="w-full p-2 border rounded-lg" /></div>
+                    <>
+                        <div className="col-span-2">
+                            <label className="block text-sm font-bold text-gray-700">Role / Job Title</label>
+                            <input name="role" value={formData.role || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" placeholder="e.g. Core Surgical Trainee" required />
                         </div>
-                    </div>
-                );
-            
-            case 'Technical Skills':
-                return (
-                    <div className="space-y-4">
-                        <div><label className="block text-sm font-semibold text-gray-700 mb-1">Skill Name</label><input name="name" value={formData.name || ''} onChange={handleChange} className="w-full p-2 border rounded-lg" required /></div>
+                        <div className="col-span-2">
+                            <label className="block text-sm font-bold text-gray-700">Hospital / Organization</label>
+                            <input name="organization" value={formData.organization || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" placeholder="e.g. St Thomas' Hospital" required />
+                        </div>
                         <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-1">Level</label>
-                            <select name="level" value={formData.level || 'Observed'} onChange={handleChange} className="w-full p-2 border rounded-lg bg-white">
-                                <option>Observed</option>
-                                <option>Assisted</option>
-                                <option>Performed (Supervised)</option>
-                                <option>Independent</option>
-                            </select>
+                            <label className="block text-sm font-bold text-gray-700">Start Date</label>
+                            <input type="month" name="startDate" value={formData.startDate || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" />
                         </div>
-                    </div>
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700">End Date</label>
+                            <input type="month" name="endDate" value={formData.endDate || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" placeholder="Leave blank if Current" />
+                        </div>
+                        <div className="col-span-2">
+                            <label className="block text-sm font-bold text-gray-700">Description / Responsibilities</label>
+                            <textarea name="description" value={formData.description || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" rows="3"></textarea>
+                        </div>
+                    </>
                 );
 
-            default: // Generic Fallback for Memberships, Awards, etc.
+            case 'Technical Skills':
                 return (
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-1">Title / Name</label>
-                            <input name="name" value={formData.name || ''} onChange={handleChange} className="w-full p-2 border rounded-lg" required />
+                    <>
+                        <div className="col-span-2">
+                            <label className="block text-sm font-bold text-gray-700">Skill Name</label>
+                            <input name="name" value={formData.name || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" placeholder="e.g. Laparoscopic Appendicectomy" required />
                         </div>
                         <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-1">Details / Organization</label>
-                            <input name="details" value={formData.details || ''} onChange={handleChange} className="w-full p-2 border rounded-lg" />
+                            <label className="block text-sm font-bold text-gray-700">Level</label>
+                            <select name="level" value={formData.level || 'Beginner'} onChange={handleChange} className="w-full p-2 border rounded mt-1">
+                                <option>Observed</option>
+                                <option>Assisted</option>
+                                <option>Supervised</option>
+                                <option>Independent</option>
+                                <option>Proficient</option>
+                                <option>Expert</option>
+                            </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-1">Date (Year)</label>
-                            <input name="date" value={formData.date || ''} onChange={handleChange} className="w-full p-2 border rounded-lg" placeholder="2024" />
+                            <label className="block text-sm font-bold text-gray-700">Years Experience</label>
+                            <input type="number" name="years" value={formData.years || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" />
                         </div>
-                    </div>
+                        
+                        {/* STAR RATING INPUT */}
+                        <div className="col-span-2 bg-gray-50 p-3 rounded border">
+                            <label className="block text-sm font-bold text-gray-700 mb-2">Proficiency Rating (1-5)</label>
+                            <div className="flex gap-2 items-center">
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                    <button
+                                        key={star}
+                                        type="button"
+                                        onClick={() => handleRating(star)}
+                                        className={`p-1 transition-transform hover:scale-110 focus:outline-none ${Number(formData.rating) >= star ? 'text-amber-400' : 'text-gray-300'}`}
+                                    >
+                                        <Star size={28} fill={Number(formData.rating) >= star ? "currentColor" : "none"} />
+                                    </button>
+                                ))}
+                                <span className="text-sm font-medium text-gray-600 ml-2">
+                                    {formData.rating ? `${formData.rating} Stars` : 'Rate proficiency'}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div className="col-span-2">
+                            <label className="block text-sm font-bold text-gray-700">Last Performed Date</label>
+                            <input type="date" name="date" value={formData.date || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" />
+                        </div>
+                    </>
                 );
+
+            case 'Certificates':
+            case 'Memberships':
+                return (
+                    <>
+                        <div className="col-span-2">
+                            <label className="block text-sm font-bold text-gray-700">Name / Title</label>
+                            <input name="name" value={formData.name || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" required />
+                        </div>
+                        <div className="col-span-2">
+                            <label className="block text-sm font-bold text-gray-700">Organization / Issuer</label>
+                            <input name="organization" value={formData.organization || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" required />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700">Date Issued</label>
+                            <input type="date" name="date" value={formData.date || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" />
+                        </div>
+                        {category === 'Certificates' && (
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700">Expiry Date</label>
+                                <input type="date" name="expiryDate" value={formData.expiryDate || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" />
+                            </div>
+                        )}
+                    </>
+                );
+
+            case 'Activity':
+                return (
+                    <>
+                        <div className="col-span-2">
+                            <label className="block text-sm font-bold text-gray-700">Activity Description</label>
+                            <input name="description" value={formData.description || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" placeholder="e.g. Attended World Congress" required />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700">Category</label>
+                            <select name="category" value={formData.category || 'Other'} onChange={handleChange} className="w-full p-2 border rounded mt-1">
+                                <option>Exams</option>
+                                <option>Courses</option>
+                                <option>Publications</option>
+                                <option>Teaching</option>
+                                <option>Audit/QIP</option>
+                                <option>Clinical Activity</option>
+                                <option>Other</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700">Date</label>
+                            <input type="date" name="date" value={formData.date || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700">Points</label>
+                            <input type="number" name="points" value={formData.points || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" />
+                        </div>
+                        
+                        {/* COMMENTS FIELD */}
+                        <div className="col-span-2">
+                            <label className="block text-sm font-bold text-gray-700">Comments / Reflection</label>
+                            <textarea name="comments" value={formData.comments || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" rows="3" placeholder="Enter notes or reflection here..."></textarea>
+                        </div>
+                    </>
+                );
+
+            case 'Evidence':
+                 return (
+                    <>
+                        <div className="col-span-2">
+                            <label className="block text-sm font-bold text-gray-700">File Title</label>
+                            <input name="title" value={formData.title || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" required />
+                        </div>
+                        <div className="col-span-2">
+                             <label className="block text-sm font-bold text-gray-700">Description / Context</label>
+                            <textarea name="description" value={formData.description || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" rows="2"></textarea>
+                        </div>
+                    </>
+                );
+
+            default:
+                return null;
         }
     };
 
     return (
-        <ModalWrapper title={`${initialData ? 'Edit' : 'Add'} ${category}`} onClose={onClose}>
-            <form onSubmit={handleSubmit}>
-                {renderFormFields()}
-                <div className="mt-6 flex justify-end gap-3">
-                    <button type="button" onClick={onClose} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition-colors">Cancel</button>
-                    <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-sm">Save Item</button>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
+                <div className="bg-slate-50 border-b p-4 flex justify-between items-center">
+                    <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                        {initialData ? 'Edit' : 'Add'} {category}
+                    </h3>
+                    <button onClick={onClose} className="p-1 hover:bg-slate-200 rounded-full transition"><X size={20} /></button>
                 </div>
-            </form>
-        </ModalWrapper>
+                <form onSubmit={handleSubmit} className="p-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {renderFields()}
+                    </div>
+                    <div className="mt-6 flex justify-end gap-3 border-t pt-4">
+                        <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded">Cancel</button>
+                        <button type="submit" className="px-6 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded flex items-center gap-2"><Save size={16} /> Save Item</button>
+                    </div>
+                </form>
+            </div>
+        </div>
     );
 };
 
-// --- ACTIVITY DETAIL MODAL (Read Only / View) ---
-export const ActivityDetailModal = ({ activity, onClose, onSave }) => {
-    // We reuse AddItemModal logic conceptually, but for now this is just a detailed view 
-    // or a bridge to editing.
+// --- 2. ACTIVITY DETAIL MODAL ---
+export const ActivityDetailModal = ({ activity, onClose }) => {
+    if (!activity) return null;
     return (
-        <ModalWrapper title="Activity Details" onClose={onClose}>
-            <div className="space-y-6">
-                <div>
-                    <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold 
-                        ${activity.category === 'Exams' ? 'bg-blue-100 text-blue-700' : 
-                          activity.category === 'Publications' ? 'bg-purple-100 text-purple-700' :
-                          'bg-gray-100 text-gray-700'}`}>
-                        {activity.category}
-                    </span>
-                    <h2 className="text-2xl font-bold text-slate-900 mt-2">{activity.description}</h2>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 relative">
+                <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={20} /></button>
+                
+                <div className="flex items-center gap-2 mb-4">
+                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-bold uppercase">{activity.category}</span>
+                    <span className="text-gray-400 text-sm flex items-center gap-1"><Calendar size={14}/> {activity.date}</span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
-                    <div className="flex items-center gap-2">
-                        <Calendar size={16} className="text-blue-500"/>
-                        <span>{activity.date}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <Award size={16} className="text-emerald-500"/>
-                        <span className="font-semibold text-emerald-700">+{activity.points} Points</span>
-                    </div>
-                </div>
-
-                {activity.type && (
-                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
-                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">Type</p>
-                        <p className="text-gray-800">{activity.type}</p>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">{activity.description}</h3>
+                <div className="text-emerald-600 font-bold mb-4">+{activity.points} Points</div>
+                
+                {/* DISPLAY COMMENTS */}
+                {activity.comments && (
+                    <div className="bg-gray-50 border border-gray-100 p-4 rounded-lg mt-4">
+                        <h4 className="text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1">
+                            <MessageSquare size={12}/> Reflection / Comments
+                        </h4>
+                        <p className="text-sm text-gray-700 italic">{activity.comments}</p>
                     </div>
                 )}
-
-                <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
-                    <button onClick={onClose} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Close</button>
-                </div>
             </div>
-        </ModalWrapper>
+        </div>
     );
 };
 
-// --- CPD MATRIX MODAL (Placeholder for future feature) ---
 export const CPDMatrixModal = ({ onClose }) => (
-    <ModalWrapper title="CPD Matrix" onClose={onClose}>
-        <div className="text-center py-8">
-            <AlertCircle size={48} className="mx-auto text-blue-500 mb-4" />
-            <p className="text-gray-600">This feature is coming soon.</p>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl w-full max-w-4xl p-6 relative">
+            <button onClick={onClose} className="absolute top-4 right-4"><X size={24}/></button>
+            <h2 className="text-2xl font-bold mb-4">CPD Matrix</h2>
+            <div className="h-96 border-2 border-dashed border-gray-200 rounded flex items-center justify-center text-gray-400">
+                CPD Matrix Content
+            </div>
         </div>
-    </ModalWrapper>
+    </div>
 );

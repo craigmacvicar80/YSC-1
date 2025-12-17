@@ -6,15 +6,15 @@ import {
     Mail, Menu, X, LogOut 
 } from 'lucide-react';
 
-// --- Auth & DB Imports ---
-import { AuthProvider, useAuth } from './context/AuthContext';
+// --- Firebase Imports ---
 import { doc, onSnapshot } from 'firebase/firestore'; 
 import { db } from './firebase'; 
-import Login from './pages/Login';
+import { AuthProvider, useAuth } from './context/AuthContext';
 
 // --- Import Pages ---
+import LandingPage from './pages/LandingPage'; // The new clean file
 import Dashboard from './pages/Dashboard';
-import Portfolio from './pages/Portfolio'; // Profile editing will be here now
+import Portfolio from './pages/Portfolio'; 
 import Events from './pages/Events';
 import Pathway from './pages/Pathway';
 import Jobs from './pages/Jobs';
@@ -25,39 +25,29 @@ import Marketplace from './pages/Marketplace';
 import Contact from './pages/Contact'; 
 import Medle from './pages/Medle';
 
-// --- Mock Data ---
-import { INITIAL_ACTIVITIES } from './data/portfolioData';
-
+// --- APP CONTENT COMPONENT ---
 function AppContent() {
     const [activeView, setActiveView] = useState('dashboard');
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-    
-    // Auth & User State
     const { currentUser, logout } = useAuth();
     const [userProfile, setUserProfile] = useState(null); 
 
-    // --- FETCH REAL PROFILE DATA (For Sidebar Display) ---
     useEffect(() => {
         if (currentUser) {
             const unsub = onSnapshot(doc(db, "users", currentUser.uid), (docSnapshot) => {
-                if (docSnapshot.exists()) {
-                    setUserProfile(docSnapshot.data());
-                } else {
-                    setUserProfile({ firstName: '', lastName: '', grade: '', email: currentUser.email });
-                }
+                if (docSnapshot.exists()) setUserProfile(docSnapshot.data());
+                else setUserProfile({ name: currentUser.displayName || '', email: currentUser.email });
             });
             return () => unsub();
         }
     }, [currentUser]);
 
-    // If not logged in, show Login Screen
-    if (!currentUser) return <Login />;
+    const handleLogout = async () => { try { await logout(); } catch (error) { console.error("Failed to log out", error); } };
 
-    const handleLogout = async () => {
-        try { await logout(); } catch (error) { console.error("Failed to log out", error); }
-    };
+    // *** IF NOT LOGGED IN, SHOW LANDING PAGE ***
+    if (!currentUser) return <LandingPage />;
 
-    // --- Navigation Items (Removed "My Profile") ---
+    // *** IF LOGGED IN, SHOW DASHBOARD ***
     const navItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'portfolio', label: 'Portfolio', icon: FolderOpen },
@@ -74,8 +64,8 @@ function AppContent() {
 
     const renderContent = () => {
         switch (activeView) {
-            case 'dashboard': return <Dashboard totalPoints={32} activitiesCount={14} setActiveView={setActiveView} />;
-            case 'portfolio': return <Portfolio activities={INITIAL_ACTIVITIES} />;
+            case 'dashboard': return <Dashboard setActiveView={setActiveView} />;
+            case 'portfolio': return <Portfolio activities={[]} />;
             case 'events': return <Events />;
             case 'pathway': return <Pathway />;
             case 'jobs': return <Jobs />;
@@ -84,101 +74,62 @@ function AppContent() {
             case 'network': return <Network />;
             case 'medle': return <Medle />;
             case 'marketplace': return <Marketplace />;
-            case 'contact': return <Contact />;
+            case 'contact': return <Contact />; 
             default: return <Dashboard setActiveView={setActiveView} />;
         }
     };
 
-    // Sidebar Display Logic
-    const getDisplayName = () => {
-        if (userProfile && userProfile.firstName) {
-            return `${userProfile.firstName} ${userProfile.lastName || ''}`;
-        }
-        return currentUser.email ? currentUser.email.split('@')[0] : 'User';
-    };
-
-    const getDisplayGrade = () => {
-        return (userProfile && userProfile.grade) ? userProfile.grade : 'Grade Not Set';
-    };
-
+    const getDisplayName = () => userProfile?.name || userProfile?.displayName || currentUser.email?.split('@')[0] || 'User';
+    
+    // Updated Initials Logic (Shared)
     const getInitials = () => {
-        const name = getDisplayName();
-        return name.charAt(0).toUpperCase();
+        let name = getDisplayName().trim();
+        const prefixes = ['Dr', 'Mr', 'Mrs', 'Ms', 'Miss', 'Prof'];
+        const parts = name.split(' ');
+        
+        if (parts.length > 1 && prefixes.includes(parts[0].replace('.', ''))) {
+            parts.shift();
+        }
+
+        if (parts.length >= 2) {
+            return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+        }
+        return parts[0] ? parts[0][0].toUpperCase() : 'U';
     };
 
     return (
         <div className="min-h-screen bg-slate-50 flex font-sans text-slate-900">
-            {/* Sidebar (Desktop) */}
             <aside className="hidden md:flex flex-col w-64 bg-slate-900 text-slate-300 h-screen sticky top-0 shadow-xl">
-                <div className="p-6 border-b border-slate-800">
-                    <h1 className="text-lg font-bold text-white flex items-center gap-2">
-                        Your Surgical Career
-                    </h1>
-                </div>
+                <div className="p-6 border-b border-slate-800"><h1 className="text-lg font-bold text-white">Your Surgical Career</h1></div>
                 <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto">
                     {navItems.map((item) => (
-                        <button
-                            key={item.id}
-                            onClick={() => setActiveView(item.id)}
-                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200
-                                ${activeView === item.id ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-slate-800 hover:text-white'}`}
-                        >
-                            <item.icon size={18} />
-                            {item.label}
+                        <button key={item.id} onClick={() => setActiveView(item.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${activeView === item.id ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-slate-800'}`}>
+                            <item.icon size={18} /> {item.label}
                         </button>
                     ))}
                 </nav>
                 <div className="p-4 border-t border-slate-800">
-                    <div className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-slate-800 cursor-pointer transition-colors group">
-                        <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-xs uppercase">
-                            {getInitials()}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-white truncate">{getDisplayName()}</p>
-                            <p className="text-xs text-slate-500 truncate">{getDisplayGrade()}</p>
-                        </div>
-                        <button onClick={handleLogout} title="Log Out">
-                            <LogOut size={16} className="text-slate-500 hover:text-red-400 group-hover:text-red-400" />
-                        </button>
+                    <div className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-slate-800 cursor-pointer group">
+                        <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-xs">{getInitials()}</div>
+                        <div className="flex-1 min-w-0"><p className="text-sm font-medium text-white truncate">{getDisplayName()}</p></div>
+                        <button onClick={handleLogout}><LogOut size={16} className="text-slate-500 hover:text-red-400" /></button>
                     </div>
                 </div>
             </aside>
-
-            {/* Main Content Area */}
             <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
                 <div className="md:hidden bg-slate-900 text-white p-4 flex justify-between items-center shadow-md z-20">
-                    <h1 className="font-bold flex items-center gap-2">Your Surgical Career</h1>
-                    <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
-                        {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-                    </button>
+                    <h1 className="font-bold">Your Surgical Career</h1>
+                    <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>{isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}</button>
                 </div>
-
                 {isMobileMenuOpen && (
                     <div className="md:hidden absolute top-16 left-0 w-full bg-slate-900 text-slate-300 z-10 border-b border-slate-800 shadow-xl">
                         <nav className="p-4 space-y-2">
-                            {navItems.map((item) => (
-                                <button
-                                    key={item.id}
-                                    onClick={() => { setActiveView(item.id); setIsMobileMenuOpen(false); }}
-                                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors
-                                        ${activeView === item.id ? 'bg-blue-600 text-white' : 'hover:bg-slate-800 text-slate-400'}`}
-                                >
-                                    <item.icon size={18} />
-                                    {item.label}
-                                </button>
-                            ))}
-                            <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium hover:bg-slate-800 text-red-400">
-                                <LogOut size={18} /> Sign Out
-                            </button>
+                             {navItems.map((item) => <button key={item.id} onClick={() => { setActiveView(item.id); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium ${activeView === item.id ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'}`}><item.icon size={18} />{item.label}</button>)}
+                             <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium hover:bg-slate-800 text-red-400"><LogOut size={18} /> Sign Out</button>
                         </nav>
                     </div>
                 )}
-
-                <div className="flex-1 overflow-auto bg-slate-50">
-                    <div className="max-w-7xl mx-auto w-full">
-                        {renderContent()}
-                    </div>
-                </div>
+                <div className="flex-1 overflow-auto bg-slate-50"><div className="max-w-7xl mx-auto w-full">{renderContent()}</div></div>
             </main>
         </div>
     );

@@ -1,158 +1,222 @@
-// src/pages/LandingPage.js
 import React, { useState } from 'react';
-import { Mail, Linkedin, Instagram, Youtube, Pin, Activity, ExternalLink, X, Menu } from 'lucide-react';
+import { Mail, Phone, MapPin, Linkedin, Instagram, Twitter, Globe } from 'lucide-react';
+import { 
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword 
+} from "firebase/auth";
+import { auth } from '../firebase'; // Adjust path if your firebase.js is in src/config/
 
-export default function LandingPage({ onLogin }) {
-  const [activeModal, setActiveModal] = useState(null);
+// --- SHARED CONTACT DATA ---
+import { CONTACT_CHANNELS } from '../data/contactData';
+
+export default function LandingPage() {
+  const [showAbout, setShowAbout] = useState(false);
+  const [showContact, setShowContact] = useState(false);
+  
+  // --- AUTH STATE ---
   const [authMode, setAuthMode] = useState(null); // 'login' | 'signup' | null
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const contactLinks = [
-    { name: "Email", value: "contact@yoursurgicalcareer.com", icon: <Mail size={20} className="text-white" />, bg: "bg-blue-500", link: "mailto:contact@yoursurgicalcareer.com" },
-    { name: "LinkedIn", value: "Your Surgical Career Professional", icon: <Linkedin size={20} className="text-white" />, bg: "bg-[#0077b5]", link: "#" },
-    { name: "Instagram", value: "@YourSurgicalCareer", icon: <Instagram size={20} className="text-white" />, bg: "bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-500", link: "#" },
-    { name: "YouTube", value: "Surgical Training Channel", icon: <Youtube size={20} className="text-white" />, bg: "bg-[#FF0000]", link: "#" },
-    { name: "Pinterest", value: "Surgical Resources", icon: <Pin size={20} className="text-white" />, bg: "bg-[#E60023]", link: "#" },
-  ];
-
-  const handleAuthSubmit = (e) => {
+  // --- AUTH HANDLERS ---
+  const handleAuthSubmit = async (e) => {
     e.preventDefault();
-    onLogin(); // Trigger the Firebase login
+    setError('');
+    setLoading(true);
+
+    try {
+      if (authMode === 'signup') {
+        await createUserWithEmailAndPassword(auth, email, password);
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+      }
+    } catch (err) {
+      console.error(err);
+      setError(err.message.replace('Firebase: ', ''));
+      setLoading(false);
+    }
+  };
+
+  const openAuth = (mode) => {
+    setAuthMode(mode);
+    setError('');
+    setEmail('');
+    setPassword('');
+  };
+
+  const closeModals = () => {
+    setShowAbout(false);
+    setShowContact(false);
+    setAuthMode(null);
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white flex flex-col font-sans selection:bg-teal-500/30 relative overflow-hidden">
-      
-      {/* Navbar */}
-      <nav className="p-6 md:px-12 flex justify-between items-center opacity-80 hover:opacity-100 transition-opacity z-10">
-        <div className="text-xl md:text-2xl font-bold tracking-wide text-white flex items-center gap-3">
-            <Activity size={24} className="text-teal-400" />
-            YourSurgicalCareer.com
-        </div>
-        <div className="hidden md:flex gap-6 text-sm font-medium text-slate-300">
-          <button onClick={() => setActiveModal('about')} className="hover:text-teal-400 transition-colors">About</button>
-          <button onClick={() => setActiveModal('contact')} className="hover:text-teal-400 transition-colors">Contact</button>
-        </div>
-        <div className="md:hidden text-slate-300">
-            <Menu size={24} />
+    <div style={styles.container}>
+      <nav style={styles.navbar}>
+        <div style={styles.logo}>YourSurgicalCareer.com</div>
+        <div style={styles.navLinks}>
+          <button onClick={() => setShowAbout(true)} style={styles.navLink}>About</button>
+          <button onClick={() => setShowContact(true)} style={styles.navLink}>Contact</button>
         </div>
       </nav>
 
-      {/* Hero Section */}
-      <div className="flex-1 flex flex-col items-center justify-center text-center px-4 max-w-4xl mx-auto -mt-16 w-full z-10">
-        {!authMode ? (
-            <div className="animate-fade-in">
-                <h1 className="text-4xl md:text-6xl font-serif font-bold text-slate-200 mb-6 leading-tight tracking-tight">
-                  Redefining the Future of <br className="hidden md:block" />
-                  <span className="text-white relative inline-block">
-                    Surgical Training
-                    <span className="absolute -bottom-2 left-0 w-full h-1 bg-teal-500 rounded-full opacity-80"></span>
-                  </span>
-                </h1>
-                
-                <p className="text-slate-400 text-base md:text-xl max-w-2xl mb-12 font-light leading-relaxed">
-                  Join us to revolutionize surgical training. Everything you need for your career as a surgeon, all in one place. Your specialty, conferences, exam dates, deadlines, and portfolio links. Collated for you.
-                </p>
-
-                <div className="flex flex-col sm:flex-row gap-4 w-full justify-center max-w-sm mx-auto">
-                    <button 
-                      onClick={() => setAuthMode('signup')}
-                      className="flex-1 flex items-center justify-center px-8 py-3.5 font-bold text-slate-900 transition-all duration-200 bg-teal-400 rounded-lg hover:bg-teal-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-400 hover:-translate-y-0.5 shadow-lg shadow-teal-900/20"
-                    >
-                      Sign Up
-                    </button>
-                    <button 
-                      onClick={() => setAuthMode('login')} 
-                      className="flex-1 flex items-center justify-center px-8 py-3.5 font-bold text-white transition-all duration-200 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-700 hover:-translate-y-0.5"
-                    >
-                      Log In
-                    </button>
-                </div>
-
-                <button 
-                  onClick={onLogin}
-                  className="mt-8 text-slate-500 hover:text-teal-400 font-medium text-sm transition-colors flex items-center gap-2 mx-auto group"
-                >
-                  <span>Continue as Guest / Admin</span>
-                  <ExternalLink size={14} className="group-hover:translate-x-0.5 transition-transform" />
-                </button>
-            </div>
-        ) : (
-            <div className="w-full max-w-md bg-slate-800/50 p-8 rounded-2xl border border-slate-700 backdrop-blur-sm animate-fade-in shadow-2xl">
-                <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-2xl font-bold text-white">{authMode === 'login' ? 'Welcome Back' : 'Create Account'}</h2>
-                    <button onClick={() => setAuthMode(null)} className="text-slate-400 hover:text-white transition-colors"><X size={20}/></button>
-                </div>
-                
-                {/* Auth Form (Visual Only - Triggers Guest Login for now) */}
-                <form onSubmit={handleAuthSubmit} className="space-y-4 text-left">
-                    <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Email Address</label>
-                        <input type="email" className="w-full bg-slate-900/80 border border-slate-600 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all placeholder:text-slate-600" placeholder="name@hospital.nhs.uk" required />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Password</label>
-                        <input type="password" className="w-full bg-slate-900/80 border border-slate-600 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all placeholder:text-slate-600" placeholder="••••••••" required />
-                    </div>
-                    
-                    <button type="submit" className="w-full bg-teal-500 hover:bg-teal-400 text-slate-900 font-bold py-3.5 rounded-lg transition-all mt-4 hover:shadow-lg hover:shadow-teal-500/20 active:scale-[0.98]">
-                        {authMode === 'login' ? 'Log In' : 'Create Account'}
-                    </button>
-                </form>
-
-                <div className="mt-6 pt-6 border-t border-slate-700/50">
-                    <p className="text-sm text-slate-400">
-                        {authMode === 'login' ? "Don't have an account? " : "Already have an account? "}
-                        <button onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')} className="text-teal-400 hover:text-teal-300 font-semibold hover:underline transition-colors ml-1">
-                            {authMode === 'login' ? 'Sign Up' : 'Log In'}
-                        </button>
-                    </p>
-                </div>
-            </div>
-        )}
-      </div>
-
-      {/* Footer */}
-      <footer className="p-6 text-center text-slate-600 text-xs z-10">
-        &copy; 2025 Your Surgical Career. All rights reserved.
-      </footer>
-
-      {/* About Modal */}
-      {activeModal === 'about' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-           <div className="bg-slate-800 p-8 rounded-2xl max-w-2xl text-white relative border border-slate-700 shadow-2xl">
-             <button onClick={() => setActiveModal(null)} className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"><X size={24} /></button>
-             <h2 className="text-2xl font-bold mb-4 text-teal-400">About Your Surgical Career</h2>
-             <div className="space-y-4 text-slate-300 leading-relaxed">
-               <p><strong>Your Surgical Career</strong> is designed to be the comprehensive Career Management System for surgical trainees in the UK.</p>
-               <p>We aim to bridge the gap between the fragmented tools currently available to trainees—unifying logbooks, portfolios, recruitment platforms, and exam resources into a single, cohesive "Professional Operating System."</p>
-               <p>Why use this platform? It is the sole means to effectively consolidate your career data, track your readiness for competitive selection (ST3), and access a centralized directory of jobs and hospitals without navigating multiple disparate websites.</p>
-               <p className="font-semibold text-white mt-4">Streamline your training. Focus on your surgery.</p>
-             </div>
-           </div>
+      <main style={styles.hero}>
+        <h1 style={styles.headline}>Redefining the Future of <br /><span style={styles.underlineHighlight}>Surgical Training</span></h1>
+        <p style={styles.subtext}>Join us to revolutionize surgical training. Everything you need for your career as a surgeon, all in one place.</p>
+        <div style={styles.buttonGroup}>
+          <button style={styles.signUpBtn} onClick={() => openAuth('signup')}>Sign Up</button>
+          <button style={styles.logInBtn} onClick={() => openAuth('login')}>Log In</button>
         </div>
-      )}
+      </main>
 
-      {/* Contact Modal */}
-      {activeModal === 'contact' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-           <div className="bg-slate-800 p-8 rounded-2xl max-w-lg w-full text-white relative border border-slate-700 shadow-2xl">
-             <button onClick={() => setActiveModal(null)} className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"><X size={24} /></button>
-             <h2 className="text-2xl font-bold mb-6 text-teal-400 text-center">Get in Touch</h2>
-             <div className="grid gap-3">
-               {contactLinks.map((item) => (
-                 <a key={item.name} href={item.link} target="_blank" rel="noopener noreferrer" className="flex items-center p-3 rounded-xl bg-slate-700/50 hover:bg-slate-700 border border-slate-600 hover:border-teal-500/50 transition-all group">
-                   <div className={`w-8 h-8 rounded-full flex items-center justify-center shadow-sm shrink-0 ${item.bg}`}>{item.icon}</div>
-                   <div className="ml-3 flex-1">
-                     <h3 className="text-sm font-bold text-slate-200">{item.name}</h3>
-                     <p className="text-xs text-slate-400 group-hover:text-teal-400 transition-colors truncate">{item.value}</p>
-                   </div>
-                   <ExternalLink size={16} className="text-slate-500 group-hover:text-teal-400" />
-                 </a>
-               ))}
-             </div>
-           </div>
+      {/* --- MODALS OVERLAY --- */}
+      {(showAbout || showContact || authMode) && (
+        <div style={styles.modalOverlay} onClick={closeModals}>
+          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            
+            {/* 1. ABOUT MODAL */}
+            {showAbout && (
+              <>
+                <h2 style={styles.modalTitle}>About Us</h2>
+                <p style={styles.modalText}>Your Surgical Career is a centralized platform designed to streamline the complex journey of surgical training.</p>
+                <button style={styles.closeBtn} onClick={closeModals}>Close</button>
+              </>
+            )}
+            
+            {/* 2. CONTACT MODAL */}
+            {showContact && (
+              <>
+                <h2 style={styles.modalTitle}><Globe size={24} style={{verticalAlign:'middle', marginRight:'10px'}}/>Contact Hub</h2>
+                <p style={{color:'#94a3b8', marginBottom:'20px'}}>Connect with our team through our primary channels.</p>
+                <div style={styles.contactGrid}>
+                  {CONTACT_CHANNELS.map((channel, index) => (
+                    <a key={index} href={channel.link} target="_blank" rel="noreferrer" style={styles.contactCard}>
+                      <channel.icon size={28} color={channel.hex} style={{marginBottom: '10px'}} />
+                      <div style={styles.contactLabel}>{channel.label}</div>
+                      <div style={styles.contactDetail}>{channel.detail}</div>
+                      <div style={{...styles.actionLink, color: channel.hex}}>Connect &gt;</div>
+                    </a>
+                  ))}
+                </div>
+                <div style={styles.locationCard}>
+                    <MapPin size={24} color="#94a3b8" style={{marginBottom: '8px'}} />
+                    <div style={styles.contactLabel}>Operational Address</div>
+                    <div style={styles.contactDetail}>Royal College of Surgeons (RCS), London, UK</div>
+                </div>
+                <button style={styles.closeBtn} onClick={closeModals}>Close</button>
+              </>
+            )}
+
+            {/* 3. AUTH MODAL (LOGIN / SIGNUP) */}
+            {authMode && (
+              <form onSubmit={handleAuthSubmit} style={{width: '100%'}}>
+                 <h2 style={styles.modalTitle}>
+                   {authMode === 'signup' ? 'Create Account' : 'Welcome Back'}
+                 </h2>
+                 
+                 {error && <div style={styles.errorMessage}>{error}</div>}
+
+                 <input 
+                    type="email" 
+                    placeholder="Email Address" 
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    style={styles.input}
+                 />
+                 <input 
+                    type="password" 
+                    placeholder="Password" 
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    style={styles.input}
+                 />
+                 
+                 <button type="submit" style={styles.submitBtn} disabled={loading}>
+                    {loading ? 'Processing...' : (authMode === 'signup' ? 'Sign Up' : 'Log In')}
+                 </button>
+
+                 <div style={{marginTop: '15px', fontSize: '0.9rem', color: '#94a3b8'}}>
+                    {authMode === 'signup' ? 'Already have an account? ' : "Don't have an account? "}
+                    <span 
+                      style={{color: '#2dd4bf', cursor: 'pointer', fontWeight: 'bold'}}
+                      onClick={() => setAuthMode(authMode === 'signup' ? 'login' : 'signup')}
+                    >
+                      {authMode === 'signup' ? 'Log In' : 'Sign Up'}
+                    </span>
+                 </div>
+              </form>
+            )}
+
+          </div>
         </div>
       )}
     </div>
   );
 }
+
+// --- STYLES ---
+const styles = {
+  container: { backgroundColor: '#0B1120', color: '#ffffff', minHeight: '100vh', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column' },
+  navbar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 50px', position: 'relative', zIndex: 50 },
+  logo: { fontWeight: 'bold', fontSize: '1.2rem' },
+  navLinks: { display: 'flex', gap: '20px' },
+  navLink: { background: 'none', border: 'none', color: '#ccc', cursor: 'pointer', fontSize: '1rem', zIndex: 60 },
+  hero: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', marginTop: '-50px', zIndex: 1 },
+  headline: { fontFamily: 'serif', fontSize: '3.5rem', lineHeight: '1.2', marginBottom: '20px', fontWeight: '700', color: '#fff' },
+  underlineHighlight: { borderBottom: '4px solid #2dd4bf', display: 'inline-block', lineHeight: '0.8', paddingBottom: '5px' },
+  subtext: { color: '#94a3b8', maxWidth: '600px', fontSize: '1.1rem', marginBottom: '40px' },
+  buttonGroup: { display: 'flex', gap: '20px', marginBottom: '30px' },
+  signUpBtn: { backgroundColor: '#2dd4bf', color: '#0f172a', border: 'none', padding: '12px 32px', borderRadius: '6px', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer' },
+  logInBtn: { backgroundColor: 'transparent', color: '#ffffff', border: '1px solid #334155', padding: '12px 32px', borderRadius: '6px', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer' },
+  
+  // MODAL & FORM STYLES
+  modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999, backdropFilter: 'blur(5px)' },
+  modalContent: { backgroundColor: '#1e293b', padding: '40px', borderRadius: '12px', maxWidth: '500px', width: '90%', textAlign: 'center', border: '1px solid #334155', maxHeight: '85vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center' },
+  modalTitle: { color: '#2dd4bf', marginBottom: '20px', fontSize: '1.8rem', fontWeight: 'bold' },
+  modalText: { color: '#e2e8f0', marginBottom: '10px', lineHeight: '1.6' },
+  
+  // FORM INPUTS
+  input: {
+    width: '100%',
+    padding: '12px',
+    marginBottom: '15px',
+    borderRadius: '6px',
+    border: '1px solid #334155',
+    backgroundColor: '#0f172a',
+    color: 'white',
+    fontSize: '1rem'
+  },
+  submitBtn: {
+    width: '100%',
+    padding: '12px',
+    backgroundColor: '#2dd4bf',
+    color: '#0f172a',
+    border: 'none',
+    borderRadius: '6px',
+    fontSize: '1rem',
+    fontWeight: 'bold',
+    cursor: 'pointer',
+    marginTop: '10px'
+  },
+  errorMessage: {
+    color: '#ef4444',
+    marginBottom: '15px',
+    fontSize: '0.9rem',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    padding: '10px',
+    borderRadius: '4px',
+    width: '100%'
+  },
+  
+  contactGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '15px', marginBottom: '20px', marginTop: '20px', width: '100%' },
+  contactCard: { backgroundColor: '#0f172a', padding: '20px', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', textDecoration: 'none', transition: 'transform 0.2s', border: '1px solid #334155', cursor: 'pointer' },
+  contactLabel: { color: '#fff', fontWeight: 'bold', fontSize: '1rem', marginBottom: '5px' },
+  contactDetail: { color: '#94a3b8', fontSize: '0.85rem', wordBreak: 'break-all', marginBottom: '10px' },
+  actionLink: { fontSize: '0.8rem', fontWeight: 'bold', marginTop: 'auto' },
+  locationCard: { backgroundColor: '#0f172a', padding: '15px', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', border: '1px solid #334155', marginTop: '10px', width: '100%' },
+  closeBtn: { marginTop: '25px', background: '#334155', color: 'white', border: 'none', padding: '10px 24px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }
+};
