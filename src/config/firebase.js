@@ -1,9 +1,8 @@
 // src/config/firebase.js
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeApp, getApps, getApp } from "firebase/app";
+import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 
-// TODO: Replace the values below with your real keys from the Firebase Console
 const firebaseConfig = {
   apiKey: "AIzaSyAwupPhd2FFhiByYSVsXIAoLtVZir-kUlY",
   authDomain: "your-surgical-career.firebaseapp.com",
@@ -14,9 +13,9 @@ const firebaseConfig = {
   measurementId: "G-3GHSPC7QWE"
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// Initialize Firebase only if an app doesn't already exist
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// Export the services so other files can use them
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+export default app; // CRITICAL: This allows 'import app from...' to work

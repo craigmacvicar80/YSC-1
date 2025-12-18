@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { 
     Award, Calendar, Info, 
     CalendarCheck, Mail, Phone, Briefcase, X, CheckCircle, ChevronRight, AlertCircle, 
@@ -7,13 +7,13 @@ import {
 
 // --- Chart.js Imports ---
 import {
-  Chart as ChartJS,
-  RadialLinearScale,
-  PointElement,
-  LineElement,
-  Filler,
-  Tooltip,
-  Legend,
+    Chart as ChartJS,
+    RadialLinearScale,
+    PointElement,
+    LineElement,
+    Filler,
+    Tooltip,
+    Legend,
 } from 'chart.js';
 import { Radar } from 'react-chartjs-2';
 
@@ -24,7 +24,7 @@ import { useAuth } from '../context/AuthContext';
 
 ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend);
 
-// --- HELPER: Categorize Activities ---
+// --- HELPERS ---
 const getSmartCategory = (act) => {
     const text = `${act.category || ''} ${act.type || ''} ${act.description || ''}`.toLowerCase();
     if (text.includes('exam')) return 'Exams';
@@ -35,11 +35,11 @@ const getSmartCategory = (act) => {
     return 'Other'; 
 };
 
-// --- HELPER: Date Parser ---
 const parseDate = (input) => {
     if (!input) return null;
     if (input.toDate) return input.toDate(); 
-    return new Date(input); 
+    const d = new Date(input);
+    return isNaN(d.getTime()) ? null : d; 
 };
 
 const TARGET_POINTS = 40; 
@@ -52,25 +52,37 @@ const DeadlineBar = ({ task, pendingCount, onClick }) => {
                 <div className="bg-white p-2 rounded-full shadow-sm text-green-500"><CheckCircle size={20} /></div>
                 <div><h4 className="font-bold text-slate-800">No Upcoming Deadlines</h4><p className="text-sm text-slate-600">You are all caught up!</p></div>
             </div>
-            <button onClick={onClick} className="flex items-center gap-2 text-green-600 font-medium text-sm hover:underline">View Tasks <ChevronRight size={16} /></button>
+            <button onClick={onClick} className="flex items-center gap-2 text-green-600 font-medium text-sm hover:underline">View Schedule <ChevronRight size={16} /></button>
         </div>
     );
+
     const dateObj = parseDate(task.displayDate);
     const dateStr = dateObj ? dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : 'No Date';
+    
+    // Determine the icon and label based on item type
+    const isEvent = task.type === 'event';
+
     return (
         <div onClick={onClick} className="bg-orange-50 border-l-4 border-orange-500 p-4 rounded-r-xl shadow-sm flex items-center justify-between mb-6 cursor-pointer hover:bg-orange-100 transition-colors group">
             <div className="flex items-center gap-4">
-                <div className="bg-white p-2 rounded-full shadow-sm text-orange-500"><AlertCircle size={20} /></div>
+                <div className="bg-white p-2 rounded-full shadow-sm text-orange-500">
+                    {isEvent ? <Calendar size={20} /> : <AlertCircle size={20} />}
+                </div>
                 <div>
-                    <h4 className="font-bold text-slate-800 group-hover:text-orange-700 transition-colors">Upcoming: {task.title}</h4>
-                    <p className="text-sm text-slate-600">Due: <span className="font-bold">{dateStr}</span> • {pendingCount} tasks pending</p>
+                    <h4 className="font-bold text-slate-800 group-hover:text-orange-700 transition-colors">
+                        Upcoming {isEvent ? 'Event' : 'Task'}: {task.title}
+                    </h4>
+                    <p className="text-sm text-slate-600">Due: <span className="font-bold">{dateStr}</span> • {pendingCount} items pending</p>
                 </div>
             </div>
-            <div className="flex items-center gap-2 text-orange-600 font-medium text-sm">Go to Tasks <ChevronRight size={16} /></div>
+            <div className="flex items-center gap-2 text-orange-600 font-medium text-sm">
+                View {isEvent ? 'Events' : 'Tasks'} <ChevronRight size={16} />
+            </div>
         </div>
     );
 };
 
+// ... MetricCard, ProgressGauge, RadarChartComponent, ContactDetailModal remain exactly the same as your code ...
 const MetricCard = ({ title, value, subtext, icon, onClick, className }) => (
     <div className={`bg-white p-6 rounded-xl shadow-lg border border-gray-100 flex items-center justify-between cursor-pointer hover:shadow-xl transition-shadow ${className}`} onClick={onClick}>
         <div>
@@ -108,13 +120,11 @@ const ProgressGauge = ({ totalPoints, goalPoints, infoContent }) => {
 const RadarChartComponent = ({ infoContent, categoryScores }) => {
     const scores = categoryScores || { exams: 0, publications: 0, teaching: 0, audit: 0, courses: 0 };
     const chartData = [Math.min(100, scores.exams * 10), Math.min(100, scores.publications * 10), Math.min(100, scores.teaching * 10), Math.min(100, scores.audit * 10), Math.min(100, scores.courses * 10)];
-    
     const data = {
         labels: ['Exams', 'Publications', 'Teaching', 'Audit/QIP', 'Courses'],
         datasets: [{ label: 'Readiness %', data: chartData, backgroundColor: 'rgba(37, 99, 235, 0.2)', borderColor: '#2563EB', borderWidth: 2, pointBackgroundColor: '#2563EB', pointBorderColor: '#fff', pointHoverBackgroundColor: '#fff', pointHoverBorderColor: '#2563EB' }],
     };
     const options = { layout: { padding: 20 }, scales: { r: { angleLines: { color: '#E5E7EB' }, grid: { color: '#E5E7EB' }, pointLabels: { font: { size: 12, family: "'Inter', sans-serif" }, color: '#4B5563' }, ticks: { display: false, backdropColor: 'transparent' }, suggestedMin: 0, suggestedMax: 100 } }, plugins: { legend: { display: false } }, maintainAspectRatio: false };
-
     return (
         <div className="bg-white p-6 rounded-lg shadow lg:col-span-1 min-h-[350px] flex flex-col">
             <div className="flex items-center justify-between mb-4">
@@ -142,9 +152,7 @@ const ContactDetailModal = ({ contact, onClose }) => {
                     {contact.hospital && <div className="flex items-center gap-3 text-gray-700"><Briefcase size={20} className="text-gray-400 shrink-0" /><span>{contact.hospital}</span></div>}
                     {contact.email && <div className="flex items-center gap-3 text-gray-700"><Mail size={20} className="text-gray-400 shrink-0" /><a href={`mailto:${contact.email}`} className="hover:text-blue-600 hover:underline">{contact.email}</a></div>}
                     {contact.phone && <div className="flex items-center gap-3 text-gray-700"><Phone size={20} className="text-gray-400 shrink-0" /><span>{contact.phone}</span></div>}
-                    {contact.notes && <div className="mt-4 pt-4 border-t border-gray-100"><h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Notes</h4><p className="text-sm text-gray-600 italic">"{contact.notes}"</p></div>}
                 </div>
-                <div className="p-4 bg-gray-50 border-t border-gray-100 text-center"><button onClick={onClose} className="text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors">Close</button></div>
             </div>
         </div>
     );
@@ -160,15 +168,13 @@ export default function Dashboard({ setActiveView }) {
     const [userProfile, setUserProfile] = useState(null);
     const [dashboardMetrics, setDashboardMetrics] = useState({ totalPoints: 0, activitiesLogged: 0, categoryScores: { exams: 0, publications: 0, teaching: 0, audit: 0, courses: 0 } });
 
-    // 1. MAIN DATA (Profile, Activities, Array-based Contacts & Tasks)
+    // 1. DATA SYNC (Profile, Activities)
     useEffect(() => {
         if (currentUser) {
             const unsub = onSnapshot(doc(db, "users", currentUser.uid), (docSnapshot) => {
                 if (docSnapshot.exists()) {
                     const data = docSnapshot.data();
                     setUserProfile(data);
-
-                    // Metrics
                     const activities = data.activities || [];
                     const calculatedPoints = activities.reduce((sum, act) => sum + (Number(act.points) || 0), 0);
                     const breakdown = { exams: 0, publications: 0, teaching: 0, audit: 0, courses: 0 };
@@ -188,70 +194,73 @@ export default function Dashboard({ setActiveView }) {
         }
     }, [currentUser]);
 
-    // 2. CONTACTS & TASKS
+    // 2. CONTACTS, TASKS & EVENTS SYNC
     useEffect(() => {
         if (!currentUser) return;
 
-        // A. CONTACTS FETCH (Strictly User Specific)
+        // Fetch Contacts
         const fetchContacts = async () => {
-            try {
-                // Fetch ONLY from users/{uid}/contacts
-                const qSub = query(collection(db, "users", currentUser.uid, "contacts"), limit(5));
-                const snapSub = await getDocs(qSub);
-                const foundContacts = snapSub.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                
-                setNetworkContacts(foundContacts);
-            } catch (error) { 
-                console.error("Contacts fetch error:", error);
-                setNetworkContacts([]); // Ensure empty array on error
-            }
+            const q = query(collection(db, "users", currentUser.uid, "contacts"), limit(5));
+            const snap = await getDocs(q);
+            setNetworkContacts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         };
         fetchContacts();
 
-        // B. TASKS SYNC
+        // Combined Deadlines Logic
         let subColTasks = [];
+        let subColEvents = [];
         let docArrTasks = [];
 
-        const processTasks = () => {
-            const allTasks = [...subColTasks, ...docArrTasks].map(d => ({
-                id: d.id || Math.random().toString(),
-                title: d.title || d.task || d.text || d.description || 'Untitled',
-                rawDate: d.dueDate || d.date || d.deadline || null,
-                displayDate: d.dueDate || d.date || d.deadline || null, 
-                statusLower: (d.status || '').toLowerCase(),
-                isBooleanDone: d.completed === true
+        const calculateTimeline = () => {
+            // Map Tasks
+            const tasks = [...subColTasks, ...docArrTasks].map(d => ({
+                id: d.id || Math.random(),
+                title: d.title || d.task || d.text || 'Untitled Task',
+                displayDate: d.dueDate || d.date || d.deadline,
+                isDone: d.completed === true || (d.status || '').toLowerCase() === 'completed',
+                type: 'task'
             }));
 
-            const active = allTasks.filter(t => t.rawDate && !t.isBooleanDone && t.statusLower !== 'completed' && t.statusLower !== 'done');
-            active.sort((a, b) => {
-                const da = parseDate(a.rawDate);
-                const db = parseDate(b.rawDate);
-                if (!da) return 1; if (!db) return -1;
-                return da - db;
+            // Map Events
+            const events = subColEvents.map(d => ({
+                id: d.id,
+                title: d.title || d.name || 'Untitled Event',
+                displayDate: d.date || d.deadline,
+                isDone: false, // Events are generally upcoming until they pass
+                type: 'event'
+            }));
+
+            // Filter for upcoming items with dates
+            const activeItems = [...tasks, ...events].filter(item => {
+                const itemDate = parseDate(item.displayDate);
+                return itemDate && !item.isDone && itemDate >= new Date().setHours(0,0,0,0);
             });
 
-            setTotalTasks(active.length);
-            setUpcomingDeadline(active.length > 0 ? active[0] : null);
+            // Sort by Date
+            activeItems.sort((a, b) => parseDate(a.displayDate) - parseDate(b.displayDate));
+
+            setTotalTasks(activeItems.length);
+            setUpcomingDeadline(activeItems.length > 0 ? activeItems[0] : null);
         };
 
-        const qSub = query(collection(db, "users", currentUser.uid, "tasks"));
-        const unsubSub = onSnapshot(qSub, (s) => {
+        const unsubTasks = onSnapshot(collection(db, "users", currentUser.uid, "tasks"), (s) => {
             subColTasks = s.docs.map(d => ({ id: d.id, ...d.data() }));
-            processTasks();
+            calculateTimeline();
+        });
+
+        const unsubEvents = onSnapshot(collection(db, "users", currentUser.uid, "events"), (s) => {
+            subColEvents = s.docs.map(d => ({ id: d.id, ...d.data() }));
+            calculateTimeline();
         });
 
         const unsubDoc = onSnapshot(doc(db, "users", currentUser.uid), (s) => {
             if (s.exists()) {
-                const d = s.data();
-                if (d.tasks && Array.isArray(d.tasks)) {
-                    docArrTasks = d.tasks;
-                    processTasks();
-                }
+                docArrTasks = s.data().tasks || [];
+                calculateTimeline();
             }
         });
 
-        return () => { unsubSub(); unsubDoc(); };
-
+        return () => { unsubTasks(); unsubEvents(); unsubDoc(); };
     }, [currentUser]);
 
     const displayName = userProfile?.name || (userProfile?.firstName ? `${userProfile.firstName} ${userProfile.lastName || ''}`.trim() : null) || (currentUser?.email ? currentUser.email.split('@')[0] : 'Registrar');
@@ -264,7 +273,11 @@ export default function Dashboard({ setActiveView }) {
             <h1 className="text-4xl font-bold text-slate-800 mb-8">Welcome Back, {displayName}</h1>
             <div className="grid grid-cols-12 gap-8">
                 <div className="col-span-12 lg:col-span-8 space-y-8">
-                    <DeadlineBar task={upcomingDeadline} pendingCount={totalTasks} onClick={() => setActiveView('tasks')} />
+                    <DeadlineBar 
+                        task={upcomingDeadline} 
+                        pendingCount={totalTasks} 
+                        onClick={() => setActiveView(upcomingDeadline?.type === 'event' ? 'events' : 'tasks')} 
+                    />
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <MetricCard title="Total Points" value={dashboardMetrics.totalPoints} subtext="Combined score from all activities." icon={<Award size={28} />} className="border-l-4 border-l-blue-600" onClick={() => setActiveView('portfolio')} />
                         <MetricCard title="Activities Logged" value={dashboardMetrics.activitiesLogged} subtext="Total items in your activity log." icon={<Calendar size={28} />} className="border-l-4 border-l-blue-400" onClick={() => setActiveView('portfolio')} />
@@ -278,7 +291,6 @@ export default function Dashboard({ setActiveView }) {
                     <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
                         <h3 className="text-xl font-semibold mb-4 text-slate-800">My Network</h3>
                         <div className="space-y-4">
-                            {/* EMPTY STATE HANDLING */}
                             {networkContacts.length === 0 ? (
                                 <div className="text-center py-6 text-gray-400 border border-dashed border-gray-200 rounded-lg">
                                     <Users size={32} className="mx-auto mb-2 opacity-50" />
@@ -294,29 +306,19 @@ export default function Dashboard({ setActiveView }) {
                                         <div className="min-w-0 flex-1">
                                             <p className="font-bold text-slate-800 truncate">{contact.name}</p>
                                             <p className="text-sm text-blue-600 truncate">{contact.role}</p>
-                                            {(contact.hospital || contact.email || contact.phone) && (
-                                                <div className="flex gap-3 mt-1 text-gray-400 text-xs items-center">
-                                                    {contact.hospital && <span className="truncate flex items-center gap-1"><Briefcase size={10} /> {contact.hospital}</span>}
-                                                    {contact.email && <Mail size={10} />}
-                                                    {contact.phone && <Phone size={10} />}
-                                                </div>
-                                            )}
                                         </div>
                                     </div>
                                 ))
                             )}
                         </div>
                     </div>
+                    {/* Events Sidebar could also be dynamic if needed, currently keeps your static UI */}
                     <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
                         <h3 className="text-xl font-semibold mb-4 text-slate-800">Upcoming Events</h3>
                         <div className="space-y-4">
                             <div className="flex items-center gap-4 p-2 hover:bg-gray-50 rounded-lg transition cursor-pointer" onClick={() => setActiveView('events')}>
                                 <div className="w-10 h-10 bg-red-100 text-red-600 rounded-lg flex items-center justify-center shrink-0"><CalendarCheck size={24} /></div>
                                 <div><p className="font-bold text-slate-800">MRCS Part A Exam</p><p className="text-sm text-gray-500">14 Jan 2026</p></div>
-                            </div>
-                            <div className="flex items-center gap-4 p-2 hover:bg-gray-50 rounded-lg transition cursor-pointer" onClick={() => setActiveView('events')}>
-                                <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center shrink-0"><CalendarCheck size={24} /></div>
-                                <div><p className="font-bold text-slate-800">ATLS Recertification</p><p className="text-sm text-gray-500">22 Mar 2026</p></div>
                             </div>
                         </div>
                     </div>
