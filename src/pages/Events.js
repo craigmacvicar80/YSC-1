@@ -1,33 +1,43 @@
-// src/pages/Events.js - Row Click opens Detail Card
-import React, { useState, useEffect } from 'react';
+// src/pages/Events.js
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
     Calendar, MapPin, Search, 
     ChevronUp, ChevronDown, ArrowUpDown, 
-    Heart, Plus, X, ExternalLink, Building2, Info 
+    Heart, Plus, X, ExternalLink, Building2, Info,
+    Pencil, Trash2, User, Globe
 } from 'lucide-react';
-import { collection, getDocs, addDoc } from 'firebase/firestore';
+import { 
+    collection, getDocs, addDoc, deleteDoc,
+    doc, getDoc, updateDoc, setDoc, arrayUnion, arrayRemove 
+} from 'firebase/firestore';
+import { getAuth, onAuthStateChanged } from 'firebase/auth'; 
 import { db } from '../firebase'; 
 
 export default function Events() {
+    // --- STATE ---
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [user, setUser] = useState(null); 
     
     // Feature States
     const [favorites, setFavorites] = useState([]);
-    const [showCreateModal, setShowCreateModal] = useState(false);
     
-    // DETAIL MODAL STATE
+    // Modal States
+    const [showModal, setShowModal] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
     const [selectedEvent, setSelectedEvent] = useState(null);
 
     // Search & Filter State
+    const [activeTab, setActiveTab] = useState('database'); // 'database', 'personal', 'favorites'
     const [searchTerm, setSearchTerm] = useState('');
     const [typeFilter, setTypeFilter] = useState('All');
     
     // Sorting State
-    const [sortConfig, setSortConfig] = useState({ key: 'title', direction: 'asc' });
+    const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'asc' });
 
-    // Form State for New Event
+    // Form State
     const [formData, setFormData] = useState({
+        id: null, 
         title: '',
         date: '',
         type: 'Conference',
@@ -36,9 +46,19 @@ export default function Events() {
         link: ''
     });
 
-    // --- 1. LOAD EVENTS & FAVORITES ---
+    // --- HELPER: FORMAT DATE ---
+    const formatDate = (dateString) => {
+        if (!dateString) return 'TBD';
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return dateString;
+        return new Intl.DateTimeFormat('en-GB', { 
+            day: 'numeric', month: 'short', year: 'numeric' 
+        }).format(date);
+    };
+
+    // --- 1. INITIALIZE DATA & AUTH ---
     useEffect(() => {
-        const fetchData = async () => {
+        const fetchEvents = async () => {
             try {
                 const querySnapshot = await getDocs(collection(db, "events"));
                 const eventsList = querySnapshot.docs.map(doc => ({
@@ -46,82 +66,150 @@ export default function Events() {
                     ...doc.data()
                 }));
                 setEvents(eventsList);
-
-                const savedFavs = JSON.parse(localStorage.getItem('surgicalCareerFavorites')) || [];
-                setFavorites(savedFavs);
-                
                 setLoading(false);
             } catch (error) {
                 console.error("Error fetching events:", error);
                 setLoading(false);
             }
         };
-        fetchData();
+
+        fetchEvents();
+
+        const auth = getAuth();
+        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+            setUser(currentUser);
+            if (currentUser) {
+                try {
+                    const userRef = doc(db, "users", currentUser.uid);
+                    const userSnap = await getDoc(userRef);
+                    if (userSnap.exists()) {
+                        setFavorites(userSnap.data().favorites || []);
+                    } else {
+                        await setDoc(userRef, { favorites: [] });
+                        setFavorites([]);
+                    }
+                } catch (error) {
+                    console.error("Error fetching user favorites:", error);
+                }
+            } else {
+                setFavorites([]);
+                setActiveTab('database');
+            }
+        });
+
+        return () => unsubscribe(); 
     }, []);
 
-    // --- 2. TOGGLE FAVORITE ---
-    const toggleFavorite = (e, eventId) => {
-        e.stopPropagation(); // Prevent row click when clicking heart
-        let updatedFavs;
-        if (favorites.includes(eventId)) {
-            updatedFavs = favorites.filter(id => id !== eventId);
-        } else {
-            updatedFavs = [...favorites, eventId];
-        }
-        setFavorites(updatedFavs);
-        localStorage.setItem('surgicalCareerFavorites', JSON.stringify(updatedFavs));
-    };
+    // --- 2. ACTIONS ---
+    const toggleFavorite = async (e, eventId) => {
+        e.stopPropagation(); 
+        if (!user) return alert("Please log in to save favorites.");
 
-    // --- 3. CREATE EVENT ---
-    const handleCreateEvent = async (e) => {
-        e.preventDefault();
-        if (!formData.title) return;
+        let updatedFavs = favorites.includes(eventId) 
+            ? favorites.filter(id => id !== eventId)
+            : [...favorites, eventId];
+        
+        setFavorites(updatedFavs);
 
         try {
-            const newEvent = {
-                ...formData,
-                category: "Personal/Manual",
-                location: formData.location || 'TBD',
-                source: formData.source || 'Unknown',
-                link: formData.link || '#'
-            };
-
-            const docRef = await addDoc(collection(db, "events"), newEvent);
-            setEvents([...events, { id: docRef.id, ...newEvent }]);
-            
-            setFormData({ title: '', date: '', type: 'Conference', source: '', location: '', link: '' });
-            setShowCreateModal(false);
+            const userRef = doc(db, "users", user.uid); 
+            await updateDoc(userRef, {
+                favorites: favorites.includes(eventId) ? arrayRemove(eventId) : arrayUnion(eventId)
+            });
         } catch (error) {
-            console.error("Error creating event:", error);
-            alert("Failed to create event.");
+            console.error("Error updating favorites:", error);
+            setFavorites(favorites); 
         }
     };
 
-    // --- 4. HANDLE ROW CLICK ---
-    const handleRowClick = (event) => {
-        setSelectedEvent(event);
+    const handleDelete = async (e, eventId) => {
+        e.stopPropagation();
+        if (!window.confirm("Are you sure you want to delete this event? This cannot be undone.")) return;
+
+        try {
+            await deleteDoc(doc(db, "events", eventId));
+            setEvents(events.filter(ev => ev.id !== eventId));
+        } catch (error) {
+            console.error("Error deleting event:", error);
+            alert("Failed to delete event.");
+        }
     };
 
-    const closeDetailModal = () => {
-        setSelectedEvent(null);
+    const openCreateModal = () => {
+        setIsEditing(false);
+        setFormData({ id: null, title: '', date: '', type: 'Conference', source: '', location: '', link: '' });
+        setShowModal(true);
     };
 
-    // --- SORTING ---
+    const openEditModal = (e, event) => {
+        e.stopPropagation();
+        setIsEditing(true);
+        setFormData({
+            id: event.id,
+            title: event.title || '',
+            date: event.date || '',
+            type: event.type || 'Conference',
+            source: event.source || '',
+            location: event.location || '',
+            link: event.link || ''
+        });
+        setShowModal(true);
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!formData.title) return;
+        if (!user) return alert("You must be logged in.");
+
+        const eventPayload = {
+            title: formData.title,
+            date: formData.date,
+            type: formData.type,
+            source: formData.source || 'Unknown',
+            location: formData.location || 'TBD',
+            link: formData.link || '#',
+            category: "Personal/Manual",
+            createdBy: user.uid 
+        };
+
+        try {
+            if (isEditing && formData.id) {
+                const eventRef = doc(db, "events", formData.id);
+                await updateDoc(eventRef, eventPayload);
+                setEvents(events.map(ev => ev.id === formData.id ? { ...ev, ...eventPayload } : ev));
+            } else {
+                const docRef = await addDoc(collection(db, "events"), eventPayload);
+                setEvents([...events, { id: docRef.id, ...eventPayload }]);
+            }
+            setShowModal(false);
+        } catch (error) {
+            console.error("Error saving event:", error);
+            alert("Failed to save event.");
+        }
+    };
+
+    // --- 3. SORTING & FILTERING ---
+    const handleRowClick = (event) => setSelectedEvent(event);
+    const closeDetailModal = () => setSelectedEvent(null);
+
     const handleSort = (key) => {
         let direction = 'asc';
-        if (sortConfig.key === key && sortConfig.direction === 'asc') {
-            direction = 'desc';
-        }
+        if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
         setSortConfig({ key, direction });
     };
 
-    const sortedEvents = React.useMemo(() => {
+    const sortedEvents = useMemo(() => {
         let sortableItems = [...events];
         if (sortConfig.key !== null) {
             sortableItems.sort((a, b) => {
+                if (sortConfig.key === 'date') {
+                    const dateA = new Date(a.date);
+                    const dateB = new Date(b.date);
+                    if (isNaN(dateA) || isNaN(dateB)) return 0;
+                    return sortConfig.direction === 'asc' ? dateA - dateB : dateB - dateA;
+                }
                 const aValue = a[sortConfig.key] ? a[sortConfig.key].toString().toLowerCase() : '';
                 const bValue = b[sortConfig.key] ? b[sortConfig.key].toString().toLowerCase() : '';
-                
                 if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
                 if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
                 return 0;
@@ -130,18 +218,33 @@ export default function Events() {
         return sortableItems;
     }, [events, sortConfig]);
 
-    // --- FILTERING ---
     const filteredEvents = sortedEvents.filter(event => {
+        // --- 1. PERMISSIONS & TABS LOGIC ---
+        // 'database': Shows Global events AND My events. Hides other users' events.
+        // 'personal': Shows ONLY My events.
+        // 'favorites': Shows favorited events (if valid).
+        
+        let isVisible = false;
+
+        if (activeTab === 'personal') {
+            if (user && event.createdBy === user.uid) isVisible = true;
+        } else if (activeTab === 'database') {
+            const isMine = user && event.createdBy === user.uid;
+            const isGlobal = !event.createdBy; // Assumption: Global events have no createdBy field
+            
+            if (isMine || isGlobal) isVisible = true;
+        } else if (activeTab === 'favorites') {
+            if (favorites.includes(event.id)) isVisible = true;
+        }
+
+        if (!isVisible) return false;
+
+        // --- 2. SEARCH & TYPE FILTER ---
         const matchesSearch = 
             event.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             event.source?.toLowerCase().includes(searchTerm.toLowerCase());
         
-        let matchesType = true;
-        if (typeFilter === 'Favorites') {
-            matchesType = favorites.includes(event.id);
-        } else if (typeFilter !== 'All') {
-            matchesType = event.type === typeFilter;
-        }
+        const matchesType = typeFilter === 'All' || event.type === typeFilter;
         
         return matchesSearch && matchesType;
     });
@@ -161,47 +264,51 @@ export default function Events() {
                 <div>
                     <h1 className="text-2xl font-bold text-slate-800">Events Database</h1>
                     <p className="text-sm text-gray-500 mt-1">
-                        Viewing {filteredEvents.length} of {events.length} events
+                        Viewing {filteredEvents.length} events
                     </p>
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto items-center">
-                    <button 
-                        onClick={() => setShowCreateModal(true)}
-                        className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm text-sm"
-                    >
-                        <Plus size={16} />
-                        Create Event
-                    </button>
-
-                    <div className="flex bg-white rounded-lg border border-gray-300 p-1">
+                    
+                    {/* TABS GROUP */}
+                    <div className="flex bg-white rounded-lg border border-gray-300 p-1 shadow-sm">
                         <button 
-                            onClick={() => setTypeFilter('All')}
-                            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${typeFilter === 'All' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
+                            onClick={() => setActiveTab('database')}
+                            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center gap-2 ${activeTab === 'database' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
                         >
-                            All
+                            <Globe size={14} /> Database
                         </button>
                         <button 
-                            onClick={() => setTypeFilter('Favorites')}
-                            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center gap-1 ${typeFilter === 'Favorites' ? 'bg-red-100 text-red-700' : 'text-gray-600 hover:bg-gray-50'}`}
+                            onClick={() => {
+                                if(!user) return alert("Please log in to view your events.");
+                                setActiveTab('personal');
+                            }}
+                            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center gap-2 ${activeTab === 'personal' ? 'bg-purple-100 text-purple-700' : 'text-gray-600 hover:bg-gray-50'}`}
                         >
-                            <Heart size={14} className={typeFilter === 'Favorites' ? 'fill-current' : ''} />
-                            Favourites
+                            <User size={14} /> My Events
+                        </button>
+                        <button 
+                            onClick={() => {
+                                if(!user) return alert("Please log in to view favorites.");
+                                setActiveTab('favorites');
+                            }}
+                            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center gap-2 ${activeTab === 'favorites' ? 'bg-red-100 text-red-700' : 'text-gray-600 hover:bg-gray-50'}`}
+                        >
+                            <Heart size={14} className={activeTab === 'favorites' ? 'fill-current' : ''} /> Favorites
                         </button>
                     </div>
 
-                    <select 
-                        value={typeFilter === 'Favorites' ? 'All' : typeFilter}
-                        onChange={(e) => setTypeFilter(e.target.value)}
-                        className="px-4 py-2 border border-gray-300 rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        disabled={typeFilter === 'Favorites'}
-                    >
-                        <option value="All">All Types</option>
-                        <option value="Conference">Conference</option>
-                        <option value="Course/Workshop">Course/Workshop</option>
-                        <option value="Webinar">Webinar</option>
-                        <option value="Exam Prep">Exam Prep</option>
-                    </select>
+                    <div className="h-6 w-px bg-gray-300 mx-1 hidden sm:block"></div>
+
+                    {user && (
+                        <button 
+                            onClick={openCreateModal}
+                            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm text-sm"
+                        >
+                            <Plus size={16} />
+                            Create
+                        </button>
+                    )}
 
                     <div className="relative flex-grow md:w-64">
                         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
@@ -214,6 +321,21 @@ export default function Events() {
                         />
                     </div>
                 </div>
+            </div>
+
+            {/* --- TYPE FILTER DROPDOWN --- */}
+            <div className="mb-4 flex justify-end">
+                <select 
+                    value={typeFilter}
+                    onChange={(e) => setTypeFilter(e.target.value)}
+                    className="px-3 py-1.5 border border-gray-300 rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                    <option value="All">All Types</option>
+                    <option value="Conference">Conference</option>
+                    <option value="Course/Workshop">Course/Workshop</option>
+                    <option value="Webinar">Webinar</option>
+                    <option value="Exam Prep">Exam Prep</option>
+                </select>
             </div>
 
             {/* --- DATA TABLE --- */}
@@ -240,16 +362,20 @@ export default function Events() {
                                     <th className="px-6 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 w-3/12" onClick={() => handleSort('source')}>
                                         <div className="flex items-center">Location <SortIcon columnKey="source" /></div>
                                     </th>
+                                    {/* Action Column Always Visible to maintain layout, content depends on ownership */}
+                                    <th className="px-6 py-3 w-16"></th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                                 {filteredEvents.length > 0 ? (
                                     filteredEvents.map((event) => {
                                         const isFav = favorites.includes(event.id);
+                                        const isOwner = user && event.createdBy === user.uid;
+
                                         return (
                                             <tr 
                                                 key={event.id} 
-                                                onClick={() => handleRowClick(event)} // Row Click triggers modal
+                                                onClick={() => handleRowClick(event)} 
                                                 className="hover:bg-blue-50 transition-colors group cursor-pointer"
                                             >
                                                 <td className="px-6 py-4 text-center" onClick={(e) => e.stopPropagation()}>
@@ -259,11 +385,15 @@ export default function Events() {
                                                 </td>
                                                 <td className="px-6 py-4 text-sm font-medium text-slate-800">
                                                     {event.title}
+                                                    {/* Badge for Personal Events in Database View */}
+                                                    {isOwner && activeTab === 'database' && (
+                                                        <span className="ml-2 text-[10px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded font-bold">MINE</span>
+                                                    )}
                                                 </td>
                                                 <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">
                                                     <div className="flex items-center gap-2">
                                                         <Calendar size={14} className="text-gray-400" />
-                                                        {event.date || 'TBD'}
+                                                        {formatDate(event.date)}
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-sm">
@@ -281,13 +411,39 @@ export default function Events() {
                                                         {event.location || event.source || 'TBD'}
                                                     </div>
                                                 </td>
+                                                
+                                                {/* Actions: Only show if User Owns the event */}
+                                                <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                                                    {isOwner && (
+                                                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button 
+                                                                onClick={(e) => openEditModal(e, event)}
+                                                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                                                title="Edit Event"
+                                                            >
+                                                                <Pencil size={16} />
+                                                            </button>
+                                                            <button 
+                                                                onClick={(e) => handleDelete(e, event.id)}
+                                                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                                                title="Delete Event"
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </td>
                                             </tr>
                                         );
                                     })
                                 ) : (
                                     <tr>
-                                        <td colspan="5" className="px-6 py-12 text-center text-gray-500">
-                                            {typeFilter === 'Favorites' ? "You haven't saved any events yet." : "No events found matching your search."}
+                                        <td colSpan="6" className="px-6 py-12 text-center text-gray-500">
+                                            {activeTab === 'personal' 
+                                                ? (user ? "You haven't added any personal events yet." : "Please log in to see your events.")
+                                                : activeTab === 'favorites' 
+                                                    ? "No favorites saved yet." 
+                                                    : "No events found matching your search."}
                                         </td>
                                     </tr>
                                 )}
@@ -334,7 +490,7 @@ export default function Events() {
                                     </div>
                                     <div>
                                         <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide">Date</p>
-                                        <p className="text-slate-800 font-medium">{selectedEvent.date || 'To Be Determined'}</p>
+                                        <p className="text-slate-800 font-medium">{formatDate(selectedEvent.date)}</p>
                                     </div>
                                 </div>
 
@@ -397,18 +553,20 @@ export default function Events() {
                 </div>
             )}
 
-            {/* --- CREATE EVENT MODAL --- */}
-            {showCreateModal && (
+            {/* --- CREATE / EDIT MODAL --- */}
+            {showModal && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden">
                         <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                            <h2 className="text-xl font-bold text-slate-800">Create New Event</h2>
-                            <button onClick={() => setShowCreateModal(false)} className="text-gray-400 hover:text-gray-600">
+                            <h2 className="text-xl font-bold text-slate-800">
+                                {isEditing ? 'Edit Event' : 'Create New Event'}
+                            </h2>
+                            <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">
                                 <X size={24} />
                             </button>
                         </div>
                         
-                        <form onSubmit={handleCreateEvent} className="p-6 space-y-4">
+                        <form onSubmit={handleSubmit} className="p-6 space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Event Name *</label>
                                 <input 
@@ -425,11 +583,10 @@ export default function Events() {
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
                                     <input 
-                                        type="text" 
+                                        type="date" 
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
                                         value={formData.date}
                                         onChange={e => setFormData({...formData, date: e.target.value})}
-                                        placeholder="e.g. 12 Oct 2025"
                                     />
                                 </div>
                                 <div>
@@ -484,7 +641,7 @@ export default function Events() {
                             <div className="pt-4 flex justify-end gap-3">
                                 <button 
                                     type="button"
-                                    onClick={() => setShowCreateModal(false)}
+                                    onClick={() => setShowModal(false)}
                                     className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium"
                                 >
                                     Cancel
@@ -493,7 +650,7 @@ export default function Events() {
                                     type="submit"
                                     className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
                                 >
-                                    Create Event
+                                    {isEditing ? 'Update Event' : 'Create Event'}
                                 </button>
                             </div>
                         </form>

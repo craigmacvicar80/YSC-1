@@ -1,7 +1,8 @@
+// src/pages/Medle.js
 import React, { useState, useEffect } from 'react';
 import { HelpCircle, Trophy, AlertCircle, RefreshCw, Layers } from 'lucide-react';
 import { MEDLE_CASES } from '../data/medleCases'; 
-import { useAuth } from '../context/AuthContext'; // 1. Import Auth
+import { useAuth } from '../context/AuthContext'; 
 
 // --- DAILY ROTATION LOGIC ---
 const getDailyCase = () => {
@@ -21,7 +22,7 @@ const getDailyCase = () => {
 };
 
 export default function Medle() {
-  const { currentUser } = useAuth(); // 2. Get Current User
+  const { currentUser } = useAuth(); 
   
   // --- STATE ---
   const [dailyData, setDailyData] = useState(null);
@@ -29,21 +30,20 @@ export default function Medle() {
   const [gameState, setGameState] = useState('playing'); 
   const [userGuess, setUserGuess] = useState('');
   const [feedback, setFeedback] = useState('');
-  const [showInput, setShowInput] = useState(false);
+  // Removed showInput state to keep input always open
   
   // Stats State
   const [stats, setStats] = useState({ streak: 0, wins: 0, lastPlayedIndex: -1 });
 
   // --- INITIALIZATION ---
   useEffect(() => {
-    if (!currentUser) return; // Wait for user to load
+    if (!currentUser) return; 
 
     const daily = getDailyCase();
     if (!daily) return;
 
     setDailyData(daily);
 
-    // 3. CREATE UNIQUE STORAGE KEYS BASED ON USER ID
     const STATE_KEY = `medle_state_${currentUser.uid}`;
     const STATS_KEY = `medle_stats_${currentUser.uid}`;
 
@@ -54,17 +54,14 @@ export default function Medle() {
     // Load Game Progress
     const savedState = JSON.parse(localStorage.getItem(STATE_KEY));
 
-    // Check if save file belongs to TODAY'S puzzle
     if (savedState && savedState.dayIndex === daily.dayIndex) {
       setCluesRevealed(savedState.cluesRevealed);
       setGameState(savedState.gameState);
     } else {
-      // New Day: Reset board
       setCluesRevealed(1);
       setGameState('playing');
-      // Note: We don't clear stats, just the daily board
     }
-  }, [currentUser]); // Run whenever user changes
+  }, [currentUser]); 
 
   // --- SAVE STATE ON CHANGE ---
   useEffect(() => {
@@ -83,7 +80,6 @@ export default function Medle() {
   const handleGetClue = () => {
     if (cluesRevealed < dailyData.data.Max_Clues) {
       setCluesRevealed(prev => prev + 1);
-      setShowInput(false); 
       setFeedback('');
     }
   };
@@ -91,7 +87,6 @@ export default function Medle() {
   const updateStats = (isWin) => {
     const STATS_KEY = `medle_stats_${currentUser.uid}`;
     
-    // Prevent double counting if they reload page after winning
     if (stats.lastPlayedIndex === dailyData.dayIndex) return;
 
     const newStats = {
@@ -207,52 +202,45 @@ export default function Medle() {
           )}
         </div>
 
-        {/* CONTROLS */}
+        {/* CONTROLS (ALWAYS OPEN) */}
         {!isGameOver && (
-          <div className="p-4 bg-slate-50 border-t border-slate-200">
-            {feedback && <p className="text-center text-red-500 text-sm font-bold mb-3 animate-pulse">{feedback}</p>}
+          <div className="p-4 bg-slate-50 border-t border-slate-200 space-y-4">
+            
+            {/* 1. Clue Button */}
+            <button 
+                onClick={handleGetClue}
+                disabled={cluesRevealed >= activeCase.Max_Clues}
+                className="w-full bg-blue-100 hover:bg-blue-200 text-blue-800 py-3 rounded-lg font-bold transition disabled:opacity-50 disabled:cursor-not-allowed border border-blue-200 flex items-center justify-center gap-2"
+            >
+                <HelpCircle size={18} />
+                {cluesRevealed >= activeCase.Max_Clues ? "No More Clues Available" : "Reveal Next Clue"}
+            </button>
 
-            {!showInput ? (
-              <div className="flex gap-3">
-                <button 
-                  onClick={handleGetClue}
-                  disabled={cluesRevealed >= activeCase.Max_Clues}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold transition disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {cluesRevealed >= activeCase.Max_Clues ? "No More Clues" : `Get Clue ${cluesRevealed + 1}`}
-                </button>
-                <button 
-                  onClick={() => setShowInput(true)}
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-lg font-bold transition"
-                >
-                  Make Diagnosis
-                </button>
-              </div>
-            ) : (
-              <div className="animate-in slide-in-from-bottom-2 duration-200">
-                <label className="block text-xs font-bold text-slate-500 mb-1 ml-1">Enter Diagnosis</label>
+            {/* Feedback Message */}
+            {feedback && <p className="text-center text-red-500 text-sm font-bold animate-pulse">{feedback}</p>}
+
+            {/* 2. Input Field (Always Visible) */}
+            <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1 ml-1 uppercase">Enter Diagnosis</label>
                 <div className="flex gap-2">
-                  <input 
+                    <input 
                     type="text" 
                     value={userGuess}
                     onChange={(e) => setUserGuess(e.target.value)}
                     placeholder="e.g. Appendicitis"
-                    className="flex-1 border-2 border-slate-300 rounded-lg px-3 py-2 outline-none focus:border-emerald-500 transition"
+                    className="flex-1 border-2 border-slate-300 rounded-lg px-4 py-3 outline-none focus:border-emerald-500 transition text-lg"
                     onKeyDown={(e) => e.key === 'Enter' && checkGuess()}
                     autoFocus
-                  />
-                  <button 
+                    />
+                    <button 
                     onClick={checkGuess}
-                    className="bg-emerald-600 text-white px-4 rounded-lg font-bold hover:bg-emerald-700"
-                  >
+                    className="bg-emerald-600 text-white px-6 rounded-lg font-bold hover:bg-emerald-700 shadow-sm"
+                    >
                     Submit
-                  </button>
+                    </button>
                 </div>
-                <button onClick={() => setShowInput(false)} className="text-xs text-slate-400 mt-2 hover:text-slate-600 underline">
-                  Cancel & Get More Clues
-                </button>
-              </div>
-            )}
+            </div>
+
           </div>
         )}
       </div>
